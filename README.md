@@ -87,8 +87,10 @@ The source SQL database and its mirrored OneLake and SQL analytics endpoint
 already contain the synthetic names. Their presence is not a security guarantee:
 source permissions do not automatically protect the mirrored paths. Semantic
 model row-level security also does not automatically protect those paths or a
-future GraphQL API. `SecurityAccessGrant` is empty, and the access matrix,
-Entra groups, and restricted test users are still needed.
+future GraphQL API. `SecurityAccessGrant` now contains staged test pairs for
+existing generic accounts, but the records alone do not enforce security.
+See the [security test matrix](./docs/security-test-matrix.md) for the
+assignments, expected results, and remaining controls.
 
 The local model draft adds student names and a separate teacher directory with
 a proposed campus-department filter. The directory is deliberately not linked
@@ -106,6 +108,7 @@ filters and their effective access remain unverified.
 | `fabric/` | Data Agent and Foundry agent instructions and test questions. |
 | `scripts/` | PowerShell deployment helpers and Python Foundry deployment, query, and evaluation helpers. |
 | `tests/` | Local unit tests for the Foundry helpers. |
+| `docs/security-test-matrix.md` | Pseudonymous test scenarios, SQL oracles, and unverified access controls. |
 | `AGENTS.md` | Project requirements, deployment status, security constraints, and pending acceptance gates. |
 | `settings.example.ps1` | Local configuration template; no credentials belong in this file. |
 

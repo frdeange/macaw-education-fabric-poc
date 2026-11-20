@@ -131,8 +131,9 @@ sensitive characteristics from names or create real contact details.
   endpoints. For structured access, use Fabric API for GraphQL with delegated
   Microsoft Entra authentication and only the intended read-only objects and
   operations. Validate actual permissions and the generated API schema.
-- Implement real access restrictions by campus and department. Confirm the
-  actual access matrix with the project owner. Access is granted to specific
+- Implement real access restrictions by campus and department. The project
+  owner authorized the selection of test identities and their pair grants;
+  see `docs/security-test-matrix.md`. Access is granted to specific
   campus/department pairs, not the cross-product of separate campus and
   department lists. For enrolment and attendance, a department-restricted
   user may see only students taking at least one subject in an authorized
@@ -195,8 +196,17 @@ sensitive characteristics from names or create real contact details.
 - Six additional analytical tables have been materialized in SQL and mirrored.
   Their learner, learner-department, attendance, and assessment counts are
   5,600, 31,450, 336,000, and 87,100 respectively on the analytics endpoint;
-  `SecurityAccessGrant` has no rows. These tables are a snapshot: subsequent
-  operational changes do not automatically update them.
+  the analytical tables are snapshots, so subsequent operational changes do
+  not automatically update them.
+- `SecurityAccessGrant` now contains nine campus-department pairs for five
+  generic test identities; two additional identities have no grants. The SQL
+  database and SQL analytics endpoint contain the same nine records, and an
+  administrator query of the model returned nine records for five principals.
+  These records do not themselves enforce access. The pseudonymous scenarios,
+  SQL expected results, and remaining security gates are documented in
+  `docs/security-test-matrix.md`; operational identities are stored privately
+  outside the repository. No user access or role membership was granted by
+  this change.
 - `AnalyticsSubjectEnrollment` has been created and validated in the source SQL
   database and mirrored to the SQL analytics endpoint. It contains 43,550
   distinct student-subject rows, including 960 Dutch students at each campus.
@@ -346,10 +356,13 @@ sensitive characteristics from names or create real contact details.
   snapshot. Do not rerun them against existing data without inspecting the
   target. Never save access tokens in project files or command arguments.
 - The project owner chose pair-specific campus/department access and
-  department-student restrictions for enrolment and attendance. Entra groups,
-  their actual access matrix, and restricted test identities will be provided
-  later. Do not share or advertise an external endpoint as securely isolated
-  before the relevant access tests pass.
+  department-student restrictions for enrolment and attendance, and authorized
+  the selected generic test identities and matrix. The test mapping uses
+  individual user principal names rather than Entra groups. An enabled Power
+  BI service plan was listed for four of the seven accounts, but sign-in,
+  effective permissions, and restricted-user behavior remain unverified. Do
+  not share or advertise an external endpoint as securely isolated before the
+  relevant access tests pass.
 
 ## Pending acceptance gates
 
@@ -364,9 +377,11 @@ sensitive characteristics from names or create real contact details.
    restricted identities in an isolated development environment. Keep the
    release checkout's deployment marker until those tests pass; removing it is
    not a substitute for security.
-3. Obtain the campus/department pair grants, their Entra group memberships,
-   and restricted test users. Define how those grants map to effective user
-   identities; an empty `SecurityAccessGrant` is not a deployed policy.
+3. Configure and verify the test identities' effective permissions and
+   semantic-model role membership in an isolated environment. The staged
+   direct-principal pair records are not a deployed policy. Manage model role
+   membership in the Power BI portal after the relevant source protections
+   are in place.
 4. Configure and verify security independently for the operational SQL
    database, mirrored SQL analytics endpoint, semantic model, OneLake,
    Data Agents, GraphQL, and Foundry. Test allowed and denied pairs, overlapping
