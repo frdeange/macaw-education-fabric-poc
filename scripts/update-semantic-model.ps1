@@ -23,6 +23,8 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 . (Join-Path $PSScriptRoot 'fabric-api.ps1')
+$root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\semantic-model')).Path
+Assert-SemanticModelDeploymentAllowed -ModelRoot $root
 $headers = Get-FabricHeaders -SubscriptionId $SubscriptionId -TenantId $TenantId
 $base = "https://api.fabric.microsoft.com/v1/workspaces/$WorkspaceId"
 $matches = @(Get-FabricItems -Uri "$base/semanticModels" -Headers $headers |
@@ -71,7 +73,6 @@ foreach ($path in $baselineParts.Keys) {
     }
 }
 
-$root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\semantic-model')).Path
 $rootPrefix = $root.TrimEnd('\') + '\'
 foreach ($path in $PartPaths) {
     if ($path -notmatch '^definition/(?:[^/]+/)*[^/]+\.tmdl$' -or
