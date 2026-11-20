@@ -20,6 +20,14 @@ function Get-FabricHeaders {
     }
 }
 
+function Assert-SemanticModelDeploymentAllowed {
+    param([string]$ModelRoot)
+
+    if (Test-Path -LiteralPath (Join-Path $ModelRoot 'DEPLOYMENT_BLOCKED')) {
+        throw 'Semantic-model deployment is blocked pending campus-department security validation.'
+    }
+}
+
 function Get-FabricItems {
     param([string]$Uri, [hashtable]$Headers)
 

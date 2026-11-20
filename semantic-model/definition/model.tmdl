@@ -6,6 +6,7 @@ model Model
 
 ref table Learner
 ref table 'Learner Department'
+ref table Teacher
 ref table Subject
 ref table 'Subject Enrollment'
 ref table Date

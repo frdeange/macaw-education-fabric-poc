@@ -1,0 +1,63 @@
+/// Fictional teacher directory. It is not linked to student or teaching-assignment facts.
+table Teacher
+
+	column 'Teacher Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: TeacherKey
+
+	column 'Campus Department Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: CampusDepartmentKey
+
+	/// Artificial identifier for the synthetic teacher.
+	column 'Teacher Code'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: TeacherCode
+
+	/// Synthetic given name; names are not unique teacher identifiers.
+	column 'First Name'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: FirstName
+
+	/// Synthetic family name; names are not unique teacher identifiers.
+	column 'Last Name'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: LastName
+
+	/// Fictional campus of the teacher's school unit.
+	column Campus
+		dataType: string
+		summarizeBy: none
+		sourceColumn: CampusName
+
+	/// Fictional primary or secondary unit in which the teacher works.
+	column 'School Unit'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: SchoolUnitName
+
+	/// Primary education or secondary education.
+	column 'Education Stage'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: EducationStage
+
+	/// Fictional organizational department assigned to the teacher.
+	column Department
+		dataType: string
+		summarizeBy: none
+		sourceColumn: DepartmentName
+
+	partition Teacher = entity
+		mode: directLake
+		source
+			entityName: AnalyticsTeacher
+			schemaName: dbo
+			expressionSource: 'Direct Lake Source'

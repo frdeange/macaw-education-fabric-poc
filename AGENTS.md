@@ -209,6 +209,13 @@ sensitive characteristics from names or create real contact details.
   does not contain these name columns; both Data Agents use only that model.
   The names are nevertheless present in the source and its mirrored paths:
   effective access to those paths is not yet isolated or verified.
+- The local semantic-model draft includes student names and a separate teacher
+  directory with a proposed campus-department role filter. The directory is
+  intentionally disconnected from student and teaching-assignment facts; it
+  cannot establish which teachers taught a student. Its `AnalyticsTeacher`
+  source table and the model changes have not been deployed or verified.
+  `semantic-model/DEPLOYMENT_BLOCKED` prevents the included model deployment
+  scripts from running; it is not an access control or proof of security.
 - The Direct Lake semantic model `Macaw Education` was created and its initial
   refresh succeeded.
   Measures match SQL totals and campus/department and subject breakdowns,
@@ -350,9 +357,13 @@ sensitive characteristics from names or create real contact details.
    test the Foundry instructions, extend Data Agent validation, and validate
    security propagation with restricted users. Daily attendance is not a
    record of attendance at an individual lesson.
-2. Names are populated and mirrored, but are not yet in the semantic model or
-   Data Agents. Configure and test access controls before adding them to any
-   consumer-facing demo surface.
+2. Names are populated and mirrored, but are not yet in the published semantic
+   model or Data Agents. Before creating the teacher snapshot, deny unauthorized
+   access to the source and mirrored paths. Configure and test table-specific
+   controls, validate the snapshot and its mirroring, and test the model with
+   restricted identities in an isolated development environment. Keep the
+   release checkout's deployment marker until those tests pass; removing it is
+   not a substitute for security.
 3. Obtain the campus/department pair grants, their Entra group memberships,
    and restricted test users. Define how those grants map to effective user
    identities; an empty `SecurityAccessGrant` is not a deployed policy.
