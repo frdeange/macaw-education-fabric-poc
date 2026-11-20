@@ -1,0 +1,16 @@
+model Model
+	culture: en-US
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	sourceQueryCulture: en-US
+	discourageImplicitMeasures
+
+ref table Learner
+ref table 'Learner Department'
+ref table Subject
+ref table 'Subject Enrollment'
+ref table Date
+ref table Attendance
+ref table 'Assessment Results'
+ref table 'Access Grant'
+
+ref role 'Campus Department Access'

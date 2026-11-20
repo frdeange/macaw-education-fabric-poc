@@ -1,0 +1,38 @@
+/// One student enrollment in one subject in the academic-year snapshot.
+table 'Subject Enrollment'
+
+	/// Distinct students taking the selected subjects; department and subject totals can overlap.
+	measure '# Subject Students' = CALCULATE(DISTINCTCOUNT('Subject Enrollment'[Enrollment Key]), KEEPFILTERS(TREATAS(VALUES('Learner Department'[Department Key]), 'Subject Enrollment'[Department Key])))
+		formatString: #,##0
+		displayFolder: Enrollment
+
+	column 'Enrollment Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: EnrollmentKey
+
+	column 'Subject Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: SubjectKey
+
+	column 'Department Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: DepartmentKey
+
+	column 'Campus Department Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: CampusDepartmentKey
+
+	partition 'Subject Enrollment' = entity
+		mode: directLake
+		source
+			entityName: AnalyticsSubjectEnrollment
+			schemaName: dbo
+			expressionSource: 'Direct Lake Source'

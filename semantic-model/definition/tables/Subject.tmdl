@@ -1,0 +1,27 @@
+/// Learning area or secondary subject used by enrollments and assessment results.
+table Subject
+
+	column 'Subject Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: SubjectKey
+
+	column 'Department Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: DepartmentKey
+
+	/// Offered learning area or subject; offerings vary by stage, year, and profile.
+	column Subject
+		dataType: string
+		summarizeBy: none
+		sourceColumn: SubjectName
+
+	partition Subject = entity
+		mode: directLake
+		source
+			entityName: AnalyticsSubject
+			schemaName: dbo
+			expressionSource: 'Direct Lake Source'

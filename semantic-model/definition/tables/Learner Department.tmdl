@@ -1,0 +1,39 @@
+/// Student-to-department membership inferred from subjects taken in the snapshot.
+table 'Learner Department'
+
+	column 'Learner Department Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: LearnerDepartmentKey
+
+	column 'Enrollment Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: EnrollmentKey
+
+	column 'Department Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: DepartmentKey
+
+	column 'Campus Department Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: CampusDepartmentKey
+
+	/// Fictional department responsible for a subject taken by the student.
+	column Department
+		dataType: string
+		summarizeBy: none
+		sourceColumn: DepartmentName
+
+	partition 'Learner Department' = entity
+		mode: directLake
+		source
+			entityName: AnalyticsLearnerDepartment
+			schemaName: dbo
+			expressionSource: 'Direct Lake Source'

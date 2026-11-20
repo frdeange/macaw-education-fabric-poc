@@ -1,0 +1,13 @@
+.foundry/
+settings.local.ps1
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.log
+*.pem
+*.pfx
+*.key

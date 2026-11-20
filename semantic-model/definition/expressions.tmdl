@@ -1,0 +1,12 @@
+expression WorkspaceId = "__WORKSPACE_ID__" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+
+expression DatabaseItemId = "__DATABASE_ITEM_ID__" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+
+expression 'Direct Lake Source' =
+		let
+		    Source = AzureStorage.DataLake(
+		        "https://onelake.dfs.fabric.microsoft.com/" & WorkspaceId & "/" & DatabaseItemId,
+		        [HierarchicalNavigation=true]
+		    )
+		in
+		    Source

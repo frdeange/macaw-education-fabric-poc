@@ -1,0 +1,13 @@
+/// Restricts data to explicitly granted campus-department pairs.
+role 'Campus Department Access'
+	modelPermission: read
+
+	tablePermission 'Access Grant' = 'Access Grant'[Principal Name] = USERPRINCIPALNAME()
+
+	tablePermission 'Learner Department' = CONTAINS('Access Grant', 'Access Grant'[Principal Name], USERPRINCIPALNAME(), 'Access Grant'[Campus Department Key], 'Learner Department'[Campus Department Key])
+
+	tablePermission Subject = VAR _department = Subject[Department Key] RETURN COUNTROWS(FILTER('Access Grant', 'Access Grant'[Principal Name] = USERPRINCIPALNAME() && MOD('Access Grant'[Campus Department Key], 100) = _department)) > 0
+
+	tablePermission 'Subject Enrollment' = CONTAINS('Access Grant', 'Access Grant'[Principal Name], USERPRINCIPALNAME(), 'Access Grant'[Campus Department Key], 'Subject Enrollment'[Campus Department Key])
+
+	tablePermission 'Assessment Results' = CONTAINS('Access Grant', 'Access Grant'[Principal Name], USERPRINCIPALNAME(), 'Access Grant'[Campus Department Key], 'Assessment Results'[Campus Department Key])

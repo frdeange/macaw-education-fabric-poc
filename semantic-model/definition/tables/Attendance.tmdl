@@ -1,0 +1,47 @@
+/// One observed student attendance status on an instructional day.
+table Attendance
+
+	/// Observed student-day attendance records; blank when an individual subject is selected.
+	measure '# Attendance Records' = IF([Is Subject Filtered], BLANK(), COUNTROWS(Attendance))
+		formatString: #,##0
+		displayFolder: Attendance
+
+	/// Observed student-days marked present or late; blank when an individual subject is selected.
+	measure '# Present or Late' = IF([Is Subject Filtered], BLANK(), CALCULATE(COUNTROWS(Attendance), KEEPFILTERS(Attendance[Attendance Status] IN {"Present", "Late"})))
+		formatString: #,##0
+		displayFolder: Attendance
+
+	/// Present or late records divided by all observed attendance records.
+	measure 'Attendance Rate' = DIVIDE([# Present or Late], [# Attendance Records])
+		formatString: 0.00%
+		displayFolder: Attendance
+
+	/// Observed student-days marked absent; blank when an individual subject is selected.
+	measure '# Absences' = IF([Is Subject Filtered], BLANK(), CALCULATE(COUNTROWS(Attendance), KEEPFILTERS(Attendance[Attendance Status] IN {"Authorized absence", "Unauthorized absence"})))
+		formatString: #,##0
+		displayFolder: Attendance
+
+	column 'Enrollment Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: EnrollmentKey
+
+	column 'Date Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: DateKey
+
+	/// Present, late, authorized absence, or unauthorized absence.
+	column 'Attendance Status'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: AttendanceStatus
+
+	partition Attendance = entity
+		mode: directLake
+		source
+			entityName: AnalyticsAttendance
+			schemaName: dbo
+			expressionSource: 'Direct Lake Source'

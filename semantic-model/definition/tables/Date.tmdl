@@ -1,0 +1,48 @@
+/// Contiguous calendar covering the scheduled 2026-2027 academic year.
+table Date
+	dataCategory: Time
+
+	column 'Date Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: DateKey
+
+	/// Calendar date of an attendance observation or assessment.
+	column Date
+		dataType: dateTime
+		formatString: Short Date
+		summarizeBy: none
+		sourceColumn: CalendarDate
+
+	/// Gregorian calendar year, not the academic-year start.
+	column 'Calendar Year'
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: CalendarYear
+
+	column 'Month Number'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: MonthNumber
+
+	/// English month name, sorted chronologically.
+	column Month
+		dataType: string
+		summarizeBy: none
+		sourceColumn: MonthName
+		sortByColumn: 'Month Number'
+
+	/// English name of the weekday.
+	column Weekday
+		dataType: string
+		summarizeBy: none
+		sourceColumn: DayOfWeekName
+
+	partition Date = entity
+		mode: directLake
+		source
+			entityName: DateDimension
+			schemaName: dbo
+			expressionSource: 'Direct Lake Source'

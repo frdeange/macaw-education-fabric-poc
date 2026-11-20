@@ -1,0 +1,72 @@
+/// One observed assessment result for a student and subject.
+table 'Assessment Results'
+
+	/// Mean secondary school assessment mark on the Dutch 1-10 scale; excludes qualitative primary outcomes.
+	measure 'Average Mark' = CALCULATE(AVERAGE('Assessment Results'[Mark]), TREATAS(VALUES('Learner Department'[Department Key]), 'Assessment Results'[Department Key]))
+		formatString: #,##0.0
+		displayFolder: Learning Outcomes
+
+	/// Observed results for subjects in the selected department, including qualitative outcomes.
+	measure '# Assessment Results' = CALCULATE(COUNTROWS('Assessment Results'), TREATAS(VALUES('Learner Department'[Department Key]), 'Assessment Results'[Department Key]))
+		formatString: #,##0
+		displayFolder: Learning Outcomes
+
+	/// Distinct students with a result in the selected subject or department.
+	measure '# Assessed Students' = CALCULATE(DISTINCTCOUNT('Assessment Results'[Enrollment Key]), TREATAS(VALUES('Learner Department'[Department Key]), 'Assessment Results'[Department Key]))
+		formatString: #,##0
+		displayFolder: Learning Outcomes
+
+	column 'Assessment Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: AssessmentKey
+
+	column 'Enrollment Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: EnrollmentKey
+
+	column 'Subject Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: SubjectKey
+
+	column 'Department Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: DepartmentKey
+
+	column 'Campus Department Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: CampusDepartmentKey
+
+	column 'Date Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: DateKey
+
+	column Mark
+		dataType: decimal
+		isHidden
+		summarizeBy: none
+		sourceColumn: Mark
+
+	/// Formative primary outcome; secondary results use numeric marks instead.
+	column 'Qualitative Outcome'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: QualitativeOutcome
+
+	partition 'Assessment Results' = entity
+		mode: directLake
+		source
+			entityName: AnalyticsAssessmentResult
+			schemaName: dbo
+			expressionSource: 'Direct Lake Source'

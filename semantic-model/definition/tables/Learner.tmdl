@@ -1,0 +1,156 @@
+/// One synthetic student enrollment in the 2026-2027 snapshot.
+table Learner
+
+	/// Students in the snapshot; department and subject filters include only students taking the selected subjects.
+	measure '# Students' = IF([Is Subject Filtered], [# Subject Students], COUNTROWS(Learner))
+		formatString: #,##0
+		displayFolder: Enrollment
+
+	/// Distinct class sections containing at least one visible student in the selected subject.
+	measure '# Classes' = ```
+			VAR _subjectStudents =
+				CALCULATETABLE(
+					VALUES('Subject Enrollment'[Enrollment Key]),
+					KEEPFILTERS(TREATAS(VALUES('Learner Department'[Department Key]), 'Subject Enrollment'[Department Key]))
+				)
+			RETURN
+				IF(
+					[Is Subject Filtered],
+					CALCULATE(DISTINCTCOUNT(Learner[Class Section Key]), KEEPFILTERS(TREATAS(_subjectStudents, Learner[Enrollment Key]))),
+					DISTINCTCOUNT(Learner[Class Section Key])
+				)
+			```
+		formatString: #,##0
+		displayFolder: Enrollment
+
+	/// Visible students divided by their visible class sections; department filters may reduce the class size.
+	measure 'Average Visible Class Size' = DIVIDE([# Students], [# Classes])
+		formatString: #,##0.0
+		displayFolder: Enrollment
+
+	/// Distinct campuses represented in the visible enrollment snapshot and selected subject.
+	measure '# Campuses' = ```
+			VAR _subjectStudents =
+				CALCULATETABLE(
+					VALUES('Subject Enrollment'[Enrollment Key]),
+					KEEPFILTERS(TREATAS(VALUES('Learner Department'[Department Key]), 'Subject Enrollment'[Department Key]))
+				)
+			RETURN
+				IF(
+					[Is Subject Filtered],
+					CALCULATE(DISTINCTCOUNT(Learner[Campus Key]), KEEPFILTERS(TREATAS(_subjectStudents, Learner[Enrollment Key]))),
+					DISTINCTCOUNT(Learner[Campus Key])
+				)
+			```
+		formatString: #,##0
+		displayFolder: Enrollment
+
+	/// Detects subject filters without treating department-only restrictions as a subject selection.
+	measure 'Is Subject Filtered' = ISFILTERED(Subject[Subject]) || ISFILTERED(Subject[Subject Key]) || ISFILTERED('Subject Enrollment'[Subject Key])
+		formatString: 0
+		isHidden
+
+	column 'Enrollment Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: EnrollmentKey
+
+	column 'Campus Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: CampusKey
+
+	column 'Class Section Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: ClassSectionKey
+
+	/// Artificial identifier; it is not a real pupil identifier or BSN.
+	column 'Student Code'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: StudentCode
+
+	/// Fictional campus grouping separate primary and secondary school units.
+	column Campus
+		dataType: string
+		summarizeBy: none
+		sourceColumn: CampusName
+
+	/// Dutch municipality associated with the fictional campus.
+	column 'Campus City'
+		dataType: string
+		dataCategory: City
+		summarizeBy: none
+		sourceColumn: City
+
+	/// Dutch school-holiday region used for the campus calendar.
+	column 'Holiday Region'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: HolidayRegion
+
+	/// Fictional primary or secondary unit within the campus.
+	column 'School Unit'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: SchoolUnitName
+
+	/// Primary education or secondary education.
+	column 'Education Stage'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: EducationStage
+
+	/// Academic year of the enrollment snapshot.
+	column 'Academic Year'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: AcademicYearName
+
+	/// Primary group or secondary year represented by this enrollment.
+	column 'Year Level'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: YearLevelName
+
+	/// Number within the primary or secondary stage, not a continuous 14-year scale.
+	column 'Level Number'
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: LevelNumber
+
+	/// Section label within the campus and year level.
+	column 'Class Section'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: SectionCode
+
+	/// Secondary programme: VMBO, HAVO, or VWO; blank for primary pupils.
+	column 'Programme Track'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: TrackName
+
+	/// Illustrative upper-secondary profile; blank before a profile is selected.
+	column 'Education Profile'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: ProfileName
+
+	/// Date through which observed attendance and assessment results were generated.
+	column 'Snapshot Date'
+		dataType: dateTime
+		formatString: Short Date
+		summarizeBy: none
+		sourceColumn: SnapshotDate
+
+	partition Learner = entity
+		mode: directLake
+		source
+			entityName: AnalyticsLearner
+			schemaName: dbo
+			expressionSource: 'Direct Lake Source'

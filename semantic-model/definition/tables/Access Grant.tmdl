@@ -1,0 +1,22 @@
+/// Mapping of a signed-in principal to an explicitly authorized campus-department pair.
+table 'Access Grant'
+	isHidden
+
+	column 'Principal Name'
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: PrincipalName
+
+	column 'Campus Department Key'
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: CampusDepartmentKey
+
+	partition 'Access Grant' = entity
+		mode: directLake
+		source
+			entityName: SecurityAccessGrant
+			schemaName: dbo
+			expressionSource: 'Direct Lake Source'

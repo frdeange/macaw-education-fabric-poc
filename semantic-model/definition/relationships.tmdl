@@ -1,0 +1,33 @@
+relationship 'Learner Department to Learner'
+	fromColumn: 'Learner Department'.'Enrollment Key'
+	toColumn: Learner.'Enrollment Key'
+	crossFilteringBehavior: bothDirections
+	securityFilteringBehavior: bothDirections
+
+relationship 'Attendance to Learner'
+	fromColumn: Attendance.'Enrollment Key'
+	toColumn: Learner.'Enrollment Key'
+
+relationship 'Attendance to Date'
+	fromColumn: Attendance.'Date Key'
+	toColumn: Date.'Date Key'
+
+relationship 'Assessment Results to Learner'
+	fromColumn: 'Assessment Results'.'Enrollment Key'
+	toColumn: Learner.'Enrollment Key'
+
+relationship 'Assessment Results to Date'
+	fromColumn: 'Assessment Results'.'Date Key'
+	toColumn: Date.'Date Key'
+
+relationship 'Assessment Results to Subject'
+	fromColumn: 'Assessment Results'.'Subject Key'
+	toColumn: Subject.'Subject Key'
+
+relationship 'Subject Enrollment to Learner'
+	fromColumn: 'Subject Enrollment'.'Enrollment Key'
+	toColumn: Learner.'Enrollment Key'
+
+relationship 'Subject Enrollment to Subject'
+	fromColumn: 'Subject Enrollment'.'Subject Key'
+	toColumn: Subject.'Subject Key'
