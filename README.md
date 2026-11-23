@@ -45,7 +45,8 @@ The approved design consolidates the existing SQL mirror, synthetic timetable
 files and a PostgreSQL facilities source through separate Bronze, Silver and
 Gold Lakehouses. Two Gold-backed semantic models will serve the Data Agents
 and Foundry. Fabric HorizonDB is the preferred PostgreSQL source; it is a
-public preview. The target architecture is **not yet deployed**.
+public preview. The three Lakehouses exist but are empty; ingestion and the
+rest of the target architecture are **not yet deployed**.
 See the [medallion design](./docs/medallion-architecture.md) for source,
 security and validation requirements.
 
@@ -85,7 +86,7 @@ counts across subjects or departments can overlap.
 | Semantic model | Direct Lake model deployed and checked against SQL using an administrator identity. Its row-level security is **not validated**. Name fields are intentionally not in the published model. |
 | Data Agents | Both agents are published but unshared. Administrator smoke tests returned 960 Dutch students per campus and 87,100 assessment results; individual-subject attendance was correctly declined. These tests do not establish general reliability or restricted-user isolation. |
 | Foundry | A prompt agent with two delegated Fabric IQ connections was deployed and smoke-tested as an administrator. Version 1 predates the subject-enrollment instruction update; restricted-user access is unverified. |
-| Medallion architecture | Planned; the three Lakehouses, PostgreSQL facilities source and Gold-backed models are not yet deployed. |
+| Medallion architecture | Three empty schema-enabled Lakehouses and their SQL endpoints are deployed and verified as an administrator. Ingestion, PostgreSQL facilities and Gold-backed models are not yet deployed; restricted access is unverified. |
 | GraphQL | Planned only; no API, generated schema, or security validation has been completed. |
 | Evaluation | Generated questions and a custom evaluator are unreviewed drafts. No batch evaluation or remote evaluation suite has been verified. |
 
@@ -110,7 +111,7 @@ bypass tests remain outstanding.
 | `semantic-model/` | Parameterized TMDL definition and proposed, unvalidated security role. |
 | `fabric/` | Data Agent and Foundry agent instructions and test questions. |
 | `scripts/` | PowerShell deployment helpers and Python Foundry deployment, query, and evaluation helpers. |
-| `tests/` | Local unit tests for the Foundry helpers. |
+| `tests/` | Local tests for the Foundry helpers and Lakehouse provisioning. |
 | `docs/medallion-architecture.md` | Target data flow, agent-ready models and security gates. |
 | `AGENTS.md` | Project requirements, deployment status, security constraints, and pending acceptance gates. |
 | `settings.example.ps1` | Local configuration template; no credentials belong in this file. |
@@ -203,6 +204,23 @@ SQL analytics endpoint before deploying or refreshing the semantic model.
 Mirroring is asynchronous; an endpoint metadata refresh may be required.
 
 ## Deploy and test
+
+`scripts/deploy-lakehouses.ps1` creates the three schema-enabled Lakehouses on
+the configured workspace's active capacity. It checks existing items before
+creation, waits for provisioning and checks the SQL endpoint properties. It
+does not upload data or grant permissions. Review workspace access separately:
+separate Lakehouses in one workspace are not an isolation boundary. OneLake
+storage and Fabric compute can incur charges.
+
+```powershell
+. .\settings.local.ps1
+.\scripts\deploy-lakehouses.ps1 -SubscriptionId $SubscriptionId `
+    -TenantId $TenantId -WorkspaceId $WorkspaceId
+# Check existing items without creating missing ones:
+.\scripts\deploy-lakehouses.ps1 -SubscriptionId $SubscriptionId `
+    -TenantId $TenantId -WorkspaceId $WorkspaceId -VerifyOnly
+.\tests\test_lakehouse_deployment.ps1
+```
 
 `scripts/deploy-semantic-model.ps1` deploys the parameterized model to a
 workspace after checking that the database exists and the model name is unused.
