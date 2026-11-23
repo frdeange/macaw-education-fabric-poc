@@ -49,8 +49,17 @@ SELECT
             current_user, 'azure_cdc.get_all_tables_mirror_status()', 'EXECUTE'
         )
         ELSE false
+    END,
+    to_regprocedure('azure_cdc.check_prerequisites()') IS NOT NULL,
+    CASE
+        WHEN to_regprocedure('azure_cdc.check_prerequisites()') IS NOT NULL
+        THEN has_function_privilege(
+            current_user, 'azure_cdc.check_prerequisites()', 'EXECUTE'
+        )
+        ELSE false
     END
 """
+MIRROR_CDC_PREREQUISITES_SQL = "SELECT status, data FROM azure_cdc.check_prerequisites()"
 MIRROR_TABLE_STATUS_SQL = """
 SELECT table_name, mirroring_status
 FROM azure_cdc.get_all_tables_mirror_status()
@@ -175,9 +184,17 @@ def check_mirroring_readiness(connection: psycopg.Connection) -> None:
         prerequisites = connection.execute(MIRROR_PREREQUISITES_SQL).fetchone()
         if prerequisites is None:
             raise RuntimeError("PostgreSQL returned no mirroring prerequisite information.")
-        wal_level, enabled, cdc_installed, cdc_admin, database_create, status_exists, status_execute = (
-            prerequisites
-        )
+        (
+            wal_level,
+            enabled,
+            cdc_installed,
+            cdc_admin,
+            database_create,
+            status_exists,
+            status_execute,
+            check_exists,
+            check_execute,
+        ) = prerequisites
         failures = []
         if wal_level != "logical":
             failures.append("wal_level is not logical")
@@ -193,8 +210,29 @@ def check_mirroring_readiness(connection: psycopg.Connection) -> None:
             failures.append("the azure_cdc table eligibility function is unavailable")
         elif not status_execute:
             failures.append("the connected role cannot EXECUTE the azure_cdc table eligibility function")
+        if not check_exists:
+            failures.append("the azure_cdc prerequisite function is unavailable")
+        elif not check_execute:
+            failures.append("the connected role cannot EXECUTE the azure_cdc prerequisite function")
         if failures:
             raise RuntimeError("PostgreSQL mirroring checks failed: " + "; ".join(failures) + ".")
+
+        cdc_results = connection.execute(MIRROR_CDC_PREREQUISITES_SQL).fetchall()
+        if len(cdc_results) != 1:
+            raise RuntimeError("Expected exactly one CDC prerequisite result.")
+        cdc_status, details = cdc_results[0]
+        if not isinstance(details, list) or any(not isinstance(item, dict) for item in details):
+            raise RuntimeError("PostgreSQL returned invalid CDC prerequisite details.")
+        failed_codes = []
+        for item in details:
+            if item.get("status") != "OK":
+                code = item.get("status_code")
+                failed_codes.append(
+                    code if isinstance(code, str) and re.fullmatch(r"[A-Z0-9_]+", code) else "UNKNOWN"
+                )
+        if cdc_status != "OK" or failed_codes:
+            codes = f": {', '.join(failed_codes)}" if failed_codes else ""
+            raise RuntimeError(f"CDC prerequisites returned {cdc_status!r}{codes}.")
 
         statuses = connection.execute(MIRROR_TABLE_STATUS_SQL).fetchall()
         for table in ("facility_room", "facility_closure"):

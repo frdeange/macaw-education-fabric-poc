@@ -355,13 +355,64 @@ review those grants separately before creating the mirror.
 
 After loading the source, run the same command with `--verify-only` and
 `--check-mirroring-readiness` while authenticated as the intended mirroring
-role. In a read-only transaction, this checks `wal_level`, the mirroring flag,
-`azure_cdc` registration, effective `azure_cdc_admin` and database `CREATE`
-permissions, and the extension's eligibility status for both facilities
-tables. Missing or non-`OK` status fails explicitly. This check is prepared
-and tested locally but has not run on the Azure source. It does not configure
-permissions, verify the server's managed identity, gateway or replication
-capacity, establish mirror freshness, or prove downstream access isolation.
+role **before creating the mirror**. In a read-only transaction, this checks
+`wal_level`, the mirroring flag, `azure_cdc` registration, effective
+`azure_cdc_admin` and database `CREATE` permissions, the extension's
+`check_prerequisites()` result, and eligibility for both facilities tables.
+The [CDC prerequisite check](https://learn.microsoft.com/en-us/fabric/mirroring/azure-database-postgresql-troubleshoot#sql-queries-for-troubleshooting)
+reports issues including identity configuration, worker limits, recovery mode,
+and publication limits. Missing or non-`OK` status fails explicitly. Once a
+publication exists, the publication limit can make this *pre-creation* check
+fail; use `--verify-only` without the readiness flag to recheck source rows.
+The extended check is tested with local simulated responses, not Azure CDC.
+It does not configure permissions, inspect the role's `LOGIN`/`REPLICATION`
+attributes, verify the gateway or actual managed-identity permissions,
+establish mirror freshness, or prove downstream access isolation. The
+[limitations](https://learn.microsoft.com/en-us/fabric/mirroring/azure-database-postgresql-limitations#permissions-in-the-source-database)
+list `LOGIN` and `REPLICATION` for the mirroring role, while the tutorial's
+Entra-role example does not explicitly grant them; verify the effective
+requirements for the chosen identity rather than assuming either example is
+complete.
+
+The PostgreSQL mirror and its Bronze shortcuts have **not** been created.
+Once private connectivity, source loading, and the required approvals are in
+place, first restrict and verify source, workspace and OneLake access in an
+isolated development environment. Configure the mirror privately using the
+documented PostgreSQL tutorial; do not grant consumer access. Select only
+`public.facility_room` and `public.facility_closure`; do not select all tables.
+Review the encrypted gateway connection and observe the actual OneLake table
+paths before configuring the placeholder values in
+[`settings.example.ps1`](./settings.example.ps1) locally. The two paths must
+be under the same `Tables/` folder and end in their exact table names. If the
+observed paths differ, stop and review the implementation instead of guessing.
+
+The existing shortcut script also supports a PostgreSQL mirror. The following
+**read-only** preflight calls Fabric status and definition APIs and checks
+the source Delta logs; it does not create the mirror, gateway, directory, or
+shortcuts. Retrieving the definition requires read and write permission on the
+mirror, even though the preflight does not update it.
+
+```powershell
+. .\settings.local.ps1
+.\scripts\deploy-sql-bronze-shortcuts.ps1 -SubscriptionId $SubscriptionId `
+    -TenantId $TenantId -WorkspaceId $WorkspaceId -DatabaseItemId $PostgresMirrorItemId `
+    -SourceKind AzurePostgreSql -PostgresMirrorName $PostgresMirrorName `
+    -PostgresConnectionId $PostgresConnectionId -PostgresConnectionPath $PostgresConnectionPath `
+    -PostgresRoomPath $PostgresRoomPath -PostgresClosurePath $PostgresClosurePath -PreflightOnly
+.\tests\test_postgres_bronze_shortcuts.ps1
+```
+
+The preflight requires the reviewed encrypted OAuth VNet gateway connection, an
+explicit two-table mirror definition, `Running`/`Replicating` statuses and
+accessible Delta logs. Status and timestamps do not prove row equality or
+freshness. Independently compare every source and mirrored row, confirm the
+pipeline identity's access, and enforce and test restrictions across the
+source, mirror, OneLake and Bronze before exposing any path.
+[`fabric/POSTGRES_SHORTCUT_DEPLOYMENT_BLOCKED`](./fabric/POSTGRES_SHORTCUT_DEPLOYMENT_BLOCKED)
+blocks shortcut creation in this checkout until those gates pass; it is not an
+access control. After review and release of the block, omit `-PreflightOnly`
+to create missing shortcuts, or use `-VerifyOnly` to check existing shortcuts.
+The implementation has only been tested against simulated Fabric responses.
 
 ## Deploy and test
 

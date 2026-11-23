@@ -68,6 +68,19 @@ connectivity but is not documented as a mirroring gateway. The documented
 NotebookUtils token audiences do not include PostgreSQL, so a supported private
 Entra-authenticated seeding route is still unverified.
 
+The source loader now includes the extension's pre-creation
+`azure_cdc.check_prerequisites()` check in addition to the role and table
+checks. The PostgreSQL shortcut path is prepared locally with an explicit
+two-table contract and a mirror preflight, but no mirror or shortcut exists.
+The preflight requires manually observed table paths and checks the VNet
+connection, definition, paginated replication status and Delta-log access. It
+does not prove source-to-mirror equality, current data, pipeline access, or
+security.
+[`POSTGRES_SHORTCUT_DEPLOYMENT_BLOCKED`](../fabric/POSTGRES_SHORTCUT_DEPLOYMENT_BLOCKED)
+prevents the included script from creating PostgreSQL shortcuts until the
+independent security and validation gates are met; it is not an access control.
+All new mirror checks have only been exercised against simulated responses.
+
 No separate scheduling application or DUO dataset is required. All pupil,
 teacher, timetable and facilities data are synthetic. Government holiday dates
 are public reference information, not actual observations from a school.

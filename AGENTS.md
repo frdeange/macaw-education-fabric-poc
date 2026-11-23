@@ -281,12 +281,22 @@ sensitive characteristics from names or create real contact details.
   and readiness have not been verified from the database. This preparation
   is not a deployed Fabric mirror or proof that replication works.
 - The PostgreSQL loader has an optional, read-only source readiness check for
-  CDC registration, effective role permissions and table eligibility. Its
-  logic and queries passed local tests, but it has not connected to Azure and
-  does not verify the gateway, mirroring, freshness or downstream isolation.
+  CDC registration, effective role permissions, the extension's
+  pre-creation `check_prerequisites()` result and table eligibility. Its
+  extended logic passed local simulated tests, but it has not connected to
+  Azure CDC and does not verify the gateway, replication, freshness or
+  downstream isolation.
   The mirrored school calendar marks both planned closure dates instructional
   for all five campuses; the 17 local schedule overlaps remain plans, not
   observed events or validated Gold results.
+- PostgreSQL Bronze shortcut deployment is prepared, not deployed. The
+  preflight verifies a reviewed encrypted VNet gateway connection, explicit
+  two-table mirror definition, paginated status and manually observed Delta
+  paths; tests use simulated responses. It does not establish row equality,
+  freshness, pipeline access or isolation. The
+  `fabric/POSTGRES_SHORTCUT_DEPLOYMENT_BLOCKED` marker prevents the included
+  shortcut script from creating paths until the independent security and
+  validation gates pass; the marker is not an access control.
 - The synthetic Cosmos DB container contains 20 incidents and 40 history
   events. The 20 mirrored documents were compared in full with their seed,
   and the Bronze shortcut to the Cosmos mirror was verified. Events are

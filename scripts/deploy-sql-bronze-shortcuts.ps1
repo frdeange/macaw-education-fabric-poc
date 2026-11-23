@@ -13,20 +13,34 @@ param(
     [guid]$DatabaseItemId,
 
     [string]$SourceDatabaseName = 'MacawEducation',
+    [ValidateSet('FabricSql', 'AzurePostgreSql')]
+    [string]$SourceKind = 'FabricSql',
+    [string]$PostgresMirrorName,
+    [guid]$PostgresConnectionId = [guid]::Empty,
+    [string]$PostgresConnectionPath,
+    [string]$PostgresRoomPath,
+    [string]$PostgresClosurePath,
     [string]$BronzeName = 'MacawEducationBronze',
     [string]$SkillAttribution = 'e2e-medallion-architecture',
+    [switch]$PreflightOnly,
     [switch]$VerifyOnly
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$contractPath = Join-Path $PSScriptRoot '..\fabric\sql-bronze-tables.json'
+$contractFile = if ($SourceKind -eq 'FabricSql') {
+    'sql-bronze-tables.json'
+} else {
+    'postgres-bronze-tables.json'
+}
+$contractPath = Join-Path $PSScriptRoot "..\fabric\$contractFile"
 $contract = Get-Content -LiteralPath $contractPath -Raw | ConvertFrom-Json
 $tables = @($contract.tables)
-if ($contract.sourceSchema -cne 'dbo' -or $tables.Count -eq 0 -or
+$schema = if ($SourceKind -eq 'FabricSql') { 'dbo' } else { 'public' }
+if ($contract.sourceSchema -cne $schema -or $tables.Count -eq 0 -or
     @($tables.name | Group-Object | Where-Object Count -gt 1).Count -gt 0) {
-    throw 'The SQL Bronze table contract is invalid or contains duplicate tables.'
+    throw 'The Bronze table contract is invalid or contains duplicate tables.'
 }
 foreach ($table in $tables) {
     if ($table.name -cnotmatch '^[A-Za-z][A-Za-z0-9_]*$' -or
@@ -34,13 +48,48 @@ foreach ($table in $tables) {
         @($table.keyColumns).Count -eq 0 -or
         @($table.keyColumns | Where-Object { $_ -cnotmatch '^[A-Za-z][A-Za-z0-9_]*$' }).Count -gt 0 -or
         @($table.keyColumns | Group-Object | Where-Object Count -gt 1).Count -gt 0) {
-        throw "Invalid or excluded table in the SQL Bronze contract: '$($table.name)'."
+        throw "Invalid or excluded table in the Bronze contract: '$($table.name)'."
     }
 }
 if ([string]::IsNullOrWhiteSpace($SourceDatabaseName) -or
     [string]::IsNullOrWhiteSpace($BronzeName) -or
     [string]::IsNullOrWhiteSpace($SkillAttribution)) {
     throw 'Source name, Bronze name and Fabric skill attribution must not be empty.'
+}
+$targets = @{}
+$sourceType = 'SQLDatabase'
+$sourceName = $SourceDatabaseName
+$folderName = 'sql_mirror'
+$sourceLabel = 'SQL'
+if ($PreflightOnly -and ($VerifyOnly -or $SourceKind -ne 'AzurePostgreSql')) {
+    throw 'Preflight-only mode is available for PostgreSQL and cannot be combined with verify-only mode.'
+}
+if ($SourceKind -eq 'AzurePostgreSql') {
+    $deploymentBlock = Join-Path $PSScriptRoot '..\fabric\POSTGRES_SHORTCUT_DEPLOYMENT_BLOCKED'
+    if (-not $VerifyOnly -and -not $PreflightOnly -and (Test-Path -LiteralPath $deploymentBlock)) {
+        throw 'PostgreSQL Bronze shortcut deployment is blocked pending source, mirror and Lakehouse security validation.'
+    }
+    if ([string]::IsNullOrWhiteSpace($PostgresMirrorName) -or
+        $PostgresConnectionId -eq [guid]::Empty -or
+        [string]::IsNullOrWhiteSpace($PostgresConnectionPath) -or
+        $PostgresRoomPath -cnotmatch '\ATables/(?:[A-Za-z_][A-Za-z0-9_]*/)*facility_room\z' -or
+        $PostgresClosurePath -cnotmatch '\ATables/(?:[A-Za-z_][A-Za-z0-9_]*/)*facility_closure\z' -or
+        $PostgresRoomPath.Substring(0, $PostgresRoomPath.Length - 'facility_room'.Length) -cne
+            $PostgresClosurePath.Substring(0, $PostgresClosurePath.Length - 'facility_closure'.Length) -or
+        $tables.Count -ne 2 -or 'facility_room' -cnotin $tables.name -or
+        'facility_closure' -cnotin $tables.name) {
+        throw 'The PostgreSQL mirror, reviewed connection, Delta paths or table contract is invalid.'
+    }
+    $targets['facility_room'] = $PostgresRoomPath
+    $targets['facility_closure'] = $PostgresClosurePath
+    $sourceType = 'MirroredDatabase'
+    $sourceName = $PostgresMirrorName
+    $folderName = 'postgres_mirror'
+    $sourceLabel = 'PostgreSQL'
+} else {
+    foreach ($table in $tables) {
+        $targets[$table.name] = "Tables/$($contract.sourceSchema)/$($table.name)"
+    }
 }
 
 . (Join-Path $PSScriptRoot 'fabric-api.ps1')
@@ -63,14 +112,20 @@ if ($capacities.Count -ne 1 -or $capacities[0].state -ne 'Active') {
 
 $items = @(Get-FabricItems -Uri "$base/items" -Headers $headers)
 $source = @($items | Where-Object {
-    $_.type -eq 'SQLDatabase' -and $_.id -eq $DatabaseItemId.ToString() -and
-    $_.displayName -ceq $SourceDatabaseName
+    $_.type -eq $sourceType -and $_.id -eq $DatabaseItemId.ToString() -and
+    $_.displayName -ceq $sourceName
 })
 $bronze = @($items | Where-Object {
     $_.type -eq 'Lakehouse' -and $_.displayName -ceq $BronzeName
 })
 if ($source.Count -ne 1 -or $bronze.Count -ne 1) {
-    throw 'The source SQL database or Bronze lakehouse was not uniquely found.'
+    throw 'The source database or Bronze lakehouse was not uniquely found.'
+}
+if ($SourceKind -eq 'AzurePostgreSql') {
+    . (Join-Path $PSScriptRoot 'postgres-mirror.ps1')
+    Test-PostgresMirror -WorkspaceId $WorkspaceId -MirrorItemId $DatabaseItemId `
+        -ConnectionId $PostgresConnectionId -ConnectionPath $PostgresConnectionPath `
+        -MirrorName $PostgresMirrorName -Tables $tables -Headers $headers
 }
 $lakehouse = Invoke-RestMethod -Uri "$base/lakehouses/$($bronze[0].id)" -Headers $headers
 if ($lakehouse.id -ne $bronze[0].id -or $lakehouse.workspaceId -ne $WorkspaceId.ToString() -or
@@ -103,35 +158,35 @@ if ($claims.tid -ne $TenantId.ToString() -or ([string]$claims.aud).TrimEnd('/') 
 $storageHeaders = @{ Authorization = "Bearer $storageToken"; 'x-ms-version' = '2023-08-03' }
 
 try {
-    $shortcutPath = 'Files/sql_mirror'
-    $folderUri = "$filesPath/sql_mirror"
+    $shortcutPath = "Files/$folderName"
+    $folderUri = "$filesPath/$folderName"
     $folderResponse = Invoke-WebRequest -Method Head -Uri $folderUri -Headers $storageHeaders -SkipHttpErrorCheck
     if ($folderResponse.StatusCode -eq 200) {
         if ([string]@($folderResponse.Headers['x-ms-resource-type'])[0] -ne 'directory') {
-            throw 'The SQL mirror landing path exists but is not a directory.'
+            throw "The $sourceLabel mirror landing path exists but is not a directory."
         }
         $folderExists = $true
     } elseif ($folderResponse.StatusCode -eq 404) {
         $folderExists = $false
     } else {
-        throw "Unable to inspect the SQL mirror landing directory: HTTP $($folderResponse.StatusCode)."
+        throw "Unable to inspect the $sourceLabel mirror landing directory: HTTP $($folderResponse.StatusCode)."
     }
 
     $shortcuts = @(Get-FabricItems -Uri "$base/items/$($bronze[0].id)/shortcuts" -Headers $headers)
     $landingShortcuts = @($shortcuts | Where-Object { $_.path.TrimStart('/') -ceq $shortcutPath })
     $unexpected = @($shortcuts | Where-Object {
         $parent = $_.path.TrimStart('/')
-        ($parent -ceq 'Files' -and $_.name -ceq 'sql_mirror') -or
+        ($parent -ceq 'Files' -and $_.name -ceq $folderName) -or
         ($parent -ceq $shortcutPath -and $_.name -cnotin $tables.name) -or
         $parent.StartsWith("$shortcutPath/", [StringComparison]::Ordinal)
     })
     if ($unexpected.Count -gt 0) {
-        throw 'The SQL mirror landing directory contains shortcuts outside the reviewed table contract.'
+        throw "The $sourceLabel mirror landing directory contains shortcuts outside the reviewed table contract."
     }
 
     $missing = @()
     foreach ($table in $tables) {
-        $sourceLog = "$storageRoot/$WorkspaceId/$DatabaseItemId/Tables/$($contract.sourceSchema)/$($table.name)/_delta_log"
+        $sourceLog = "$storageRoot/$WorkspaceId/$DatabaseItemId/$($targets[$table.name])/_delta_log"
         $sourceResponse = Invoke-WebRequest -Method Head -Uri $sourceLog -Headers $storageHeaders -SkipHttpErrorCheck
         if ($sourceResponse.StatusCode -ne 200) {
             throw "The mirrored Delta log for '$($table.name)' is not accessible: HTTP $($sourceResponse.StatusCode)."
@@ -146,7 +201,7 @@ try {
             if (-not $target.PSObject.Properties['oneLake'] -or -not $target.oneLake -or
                 $target.oneLake.workspaceId -ne $WorkspaceId.ToString() -or
                 $target.oneLake.itemId -ne $DatabaseItemId.ToString() -or
-                $target.oneLake.path -cne "Tables/$($contract.sourceSchema)/$($table.name)" -or
+                $target.oneLake.path -cne $targets[$table.name] -or
                 ($target.oneLake.PSObject.Properties['connectionId'] -and $target.oneLake.connectionId)) {
                 throw "Shortcut '$($table.name)' points to an unexpected or delegated target."
             }
@@ -162,8 +217,13 @@ try {
         }
     }
 
+    if ($PreflightOnly) {
+        Write-Host 'PostgreSQL mirror and source Delta-log preflight passed; no shortcuts or directories were created.'
+        Write-Host 'Validate row equality, freshness, pipeline access and restricted-user isolation separately.'
+        return
+    }
     if ($VerifyOnly -and (-not $folderExists -or $missing.Count -gt 0)) {
-        throw "SQL mirror shortcuts missing in verify-only mode: $(($missing.name) -join ', ')."
+        throw "$sourceLabel mirror shortcuts missing in verify-only mode: $(($missing.name) -join ', ')."
     }
     if (-not $folderExists) {
         $createHeaders = $storageHeaders.Clone()
@@ -171,7 +231,7 @@ try {
         $folderResponse = Invoke-WebRequest -Method Put -Uri "${folderUri}?resource=directory" `
             -Headers $createHeaders -Body '' -SkipHttpErrorCheck
         if ($folderResponse.StatusCode -ne 201) {
-            throw "The SQL mirror landing directory was not created: HTTP $($folderResponse.StatusCode). Inspect before retrying."
+            throw "The $sourceLabel mirror landing directory was not created: HTTP $($folderResponse.StatusCode). Inspect before retrying."
         }
     }
 
@@ -183,7 +243,7 @@ try {
                 oneLake = @{
                     workspaceId = $WorkspaceId.ToString()
                     itemId = $DatabaseItemId.ToString()
-                    path = "Tables/$($contract.sourceSchema)/$($table.name)"
+                    path = $targets[$table.name]
                 }
             }
         } | ConvertTo-Json -Depth 6 -Compress
@@ -203,7 +263,7 @@ try {
             -not $matches[0].target.PSObject.Properties['oneLake'] -or
             $matches[0].target.oneLake.workspaceId -ne $WorkspaceId.ToString() -or
             $matches[0].target.oneLake.itemId -ne $DatabaseItemId.ToString() -or
-            $matches[0].target.oneLake.path -cne "Tables/$($contract.sourceSchema)/$($table.name)" -or
+            $matches[0].target.oneLake.path -cne $targets[$table.name] -or
             ($matches[0].target.oneLake.PSObject.Properties['connectionId'] -and
                 $matches[0].target.oneLake.connectionId)) {
             throw "Shortcut '$($table.name)' did not resolve to the expected target."
@@ -214,7 +274,7 @@ try {
             throw "Shortcut '$($table.name)' cannot read its Delta log: HTTP $($logResponse.StatusCode)."
         }
     }
-    Write-Host "Verified $($tables.Count) allowlisted SQL-mirror shortcuts in Bronze Files."
+    Write-Host "Verified $($tables.Count) allowlisted $sourceLabel-mirror shortcuts in Bronze Files."
     Write-Host 'No data was materialized and no permissions were granted. Restricted access remains unverified.'
 } finally {
     $storageHeaders.Clear()

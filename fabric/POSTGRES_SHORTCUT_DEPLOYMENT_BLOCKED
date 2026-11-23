@@ -1,0 +1,7 @@
+Do not remove this marker until the PostgreSQL source, mirrored database,
+Bronze Lakehouse and OneLake access controls have been independently configured
+and tested with the authorized and denied identities. Validate the mirror,
+source-to-mirror equality, and the intended pipeline identity before release.
+
+This marker blocks the included shortcut deployment script only. It is not an
+access control and does not protect the source, mirror, or existing shortcuts.

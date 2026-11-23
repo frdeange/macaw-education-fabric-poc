@@ -93,17 +93,21 @@ class PostgresFacilitiesTests(unittest.TestCase):
     def test_mirroring_readiness_checks_both_tables_in_a_read_only_transaction(self):
         connection = MagicMock()
         connection.execute.return_value.fetchone.return_value = (
-            "logical", "on", True, True, True, True, True
+            "logical", "on", True, True, True, True, True, True, True
         )
-        connection.execute.return_value.fetchall.return_value = [
-            ("facility_room", "OK"), ("facility_closure", "OK")
+        connection.execute.return_value.fetchall.side_effect = [
+            [("OK", [])],
+            [("facility_room", "OK"), ("facility_closure", "OK")],
         ]
         check_mirroring_readiness(connection)
         self.assertEqual(connection.execute.call_args_list[0].args[0], "SET TRANSACTION READ ONLY")
-        self.assertEqual(connection.execute.call_count, 3)
+        self.assertIn("to_regprocedure('azure_cdc.check_prerequisites()')", connection.execute.call_args_list[1].args[0])
+        self.assertIn("azure_cdc.check_prerequisites()", connection.execute.call_args_list[2].args[0])
+        self.assertIn("azure_cdc.get_all_tables_mirror_status()", connection.execute.call_args_list[3].args[0])
+        self.assertEqual(connection.execute.call_count, 4)
 
     def test_mirroring_readiness_rejects_missing_prerequisites(self):
-        valid = ("logical", "on", True, True, True, True, True)
+        valid = ("logical", "on", True, True, True, True, True, True, True)
         cases = (
             (0, "replica", "wal_level"),
             (1, None, "azure.fabric_mirror_enabled"),
@@ -112,6 +116,8 @@ class PostgresFacilitiesTests(unittest.TestCase):
             (4, False, "lacks CREATE"),
             (5, False, "eligibility function is unavailable"),
             (6, False, "cannot EXECUTE"),
+            (7, False, "prerequisite function is unavailable"),
+            (8, False, "cannot EXECUTE the azure_cdc prerequisite function"),
         )
         for index, value, message in cases:
             with self.subTest(message=message):
@@ -122,6 +128,29 @@ class PostgresFacilitiesTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, message):
                     check_mirroring_readiness(connection)
                 self.assertEqual(connection.execute.call_count, 2)
+
+    def test_mirroring_readiness_rejects_failed_or_ambiguous_cdc_prerequisites(self):
+        cases = (
+            (
+                [("ERROR", [{"status": "ERROR", "status_code": "MAX_WORKER_PROCESSES_TOO_LOW"}])],
+                "MAX_WORKER_PROCESSES_TOO_LOW",
+            ),
+            ([("OK", [{"status": "ERROR", "status_code": "SERVER_IN_RECOVERY"}])], "SERVER_IN_RECOVERY"),
+            ([], "exactly one CDC prerequisite result"),
+            ([("OK", []), ("OK", [])], "exactly one CDC prerequisite result"),
+            ([("OK", None)], "invalid CDC prerequisite details"),
+            ([("UNKNOWN", [])], "UNKNOWN"),
+        )
+        for result, message in cases:
+            with self.subTest(result=result):
+                connection = MagicMock()
+                connection.execute.return_value.fetchone.return_value = (
+                    "logical", "on", True, True, True, True, True, True, True
+                )
+                connection.execute.return_value.fetchall.return_value = result
+                with self.assertRaisesRegex(RuntimeError, message):
+                    check_mirroring_readiness(connection)
+                self.assertEqual(connection.execute.call_count, 3)
 
     def test_mirroring_readiness_rejects_missing_duplicate_or_unhealthy_table_status(self):
         cases = (
@@ -137,9 +166,9 @@ class PostgresFacilitiesTests(unittest.TestCase):
             with self.subTest(statuses=statuses):
                 connection = MagicMock()
                 connection.execute.return_value.fetchone.return_value = (
-                    "logical", "on", True, True, True, True, True
+                    "logical", "on", True, True, True, True, True, True, True
                 )
-                connection.execute.return_value.fetchall.return_value = statuses
+                connection.execute.return_value.fetchall.side_effect = [[("OK", [])], statuses]
                 with self.assertRaisesRegex(RuntimeError, message):
                     check_mirroring_readiness(connection)
 
