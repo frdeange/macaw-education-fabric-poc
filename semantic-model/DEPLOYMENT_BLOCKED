@@ -1,0 +1,4 @@
+The local model contains synthetic names that must not be published until
+campus-department controls and bypass tests pass for every exposed path.
+The deployment scripts refuse to run while this marker exists.
+Removing the marker is not evidence that access controls are effective.

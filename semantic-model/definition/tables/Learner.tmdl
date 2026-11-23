@@ -74,6 +74,18 @@ table Learner
 		summarizeBy: none
 		sourceColumn: StudentCode
 
+	/// Synthetic given name; names are not unique student identifiers.
+	column 'First Name'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: FirstName
+
+	/// Synthetic family name; names are not unique student identifiers.
+	column 'Last Name'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: LastName
+
 	/// Fictional campus grouping separate primary and secondary school units.
 	column Campus
 		dataType: string

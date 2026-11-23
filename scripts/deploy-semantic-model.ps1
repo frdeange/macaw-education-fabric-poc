@@ -19,6 +19,8 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 . (Join-Path $PSScriptRoot 'fabric-api.ps1')
+$root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\semantic-model')).Path
+Assert-SemanticModelDeploymentAllowed -ModelRoot $root
 $headers = Get-FabricHeaders -SubscriptionId $SubscriptionId -TenantId $TenantId
 
 $base = "https://api.fabric.microsoft.com/v1/workspaces/$WorkspaceId"
@@ -32,7 +34,6 @@ if (@($models | Where-Object { $_.displayName -eq $DisplayName }).Count -ne 0) {
     throw "A semantic model named '$DisplayName' already exists; inspect it before deploying."
 }
 
-$root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\semantic-model')).Path
 $files = @(Get-ChildItem -LiteralPath $root -File -Recurse |
     Where-Object { $_.Extension -in @('.tmdl', '.pbism') } |
     Sort-Object FullName)

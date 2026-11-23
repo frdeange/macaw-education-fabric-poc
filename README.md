@@ -85,7 +85,7 @@ counts across subjects or departments can overlap.
 | Fabric SQL Database | Deployed and validated: 5,600 students, 240 teachers, 280 sections, 336,000 attendance records, and 87,100 assessment results. |
 | Synthetic names | Populated and validated in SQL. Student, teacher, and analytical learner counts and keyed name digests match the SQL analytics endpoint, including Unicode. |
 | Mirroring and analytics | Operational and analytical tables are mirrored. The 43,550 subject-enrollment rows and the other analytical tables are point-in-time snapshots, not automatically refreshed from later operational changes. |
-| Semantic model | Direct Lake model deployed and checked against SQL using an administrator identity. Its row-level security is **not validated**. Name fields are intentionally not in the published model. |
+| Semantic model | Direct Lake model deployed and checked against SQL using an administrator identity. Its row-level security is **not validated**. Name fields exist only in the local, deployment-blocked draft, not in the published model. |
 | Data Agents | Both agents are published but unshared. Administrator smoke tests returned 960 Dutch students per campus and 87,100 assessment results; individual-subject attendance was correctly declined. These tests do not establish general reliability or restricted-user isolation. |
 | Foundry | A prompt agent with two delegated Fabric IQ connections was deployed and smoke-tested as an administrator. Version 1 predates the subject-enrollment instruction update; restricted-user access is unverified. |
 | Medallion architecture | Three schema-enabled Lakehouses and their SQL endpoints are deployed. Bronze has 20 allowlisted SQL-mirror shortcuts, verified as an administrator; no tables have been materialized. PostgreSQL facilities and Gold-backed models are not yet deployed, and restricted access is unverified. |
@@ -101,9 +101,18 @@ The source SQL database and its mirrored OneLake and SQL analytics endpoint
 already contain the synthetic names. Their presence is not a security guarantee:
 source permissions do not automatically protect the mirrored paths. Semantic
 model row-level security also does not automatically protect those paths or a
-future GraphQL API. `SecurityAccessGrant` contains staged test pairs, but those
-records do not enforce security or grant user access. Restricted-user and
-bypass tests remain outstanding.
+future GraphQL API. `SecurityAccessGrant` now contains staged test pairs for
+existing generic accounts, but the records do not enforce security or grant
+user access. Restricted-user and bypass tests remain outstanding.
+See the [security test matrix](./docs/security-test-matrix.md) for the
+assignments, expected results, and remaining controls.
+
+The local model draft adds student names and a separate teacher directory with
+a proposed campus-department filter. The directory is deliberately not linked
+to learners or teaching assignments: filters on other model tables do not
+filter it, and it must not be used to infer which teachers taught a student.
+Its `AnalyticsTeacher` source is not deployed or mirrored. Both the model
+filters and their effective access remain unverified.
 
 ## Repository layout
 
@@ -113,7 +122,8 @@ bypass tests remain outstanding.
 | `semantic-model/` | Parameterized TMDL definition and proposed, unvalidated security role. |
 | `fabric/` | Data Agent and Foundry instructions, test questions, and the SQL Bronze table contract. |
 | `scripts/` | PowerShell deployment helpers and Python Foundry deployment, query, and evaluation helpers. |
-| `tests/` | Local tests for the Foundry helpers and Lakehouse provisioning. |
+| `tests/` | Local tests for Foundry helpers, Lakehouse provisioning, SQL Bronze shortcuts, and the semantic-model deployment gate. |
+| `docs/security-test-matrix.md` | Pseudonymous test scenarios, SQL oracles, and unverified access controls. |
 | `docs/medallion-architecture.md` | Target data flow, agent-ready models and security gates. |
 | `AGENTS.md` | Project requirements, deployment status, security constraints, and pending acceptance gates. |
 | `settings.example.ps1` | Local configuration template; no credentials belong in this file. |
@@ -204,6 +214,14 @@ migrated deployment.
 Verify that all required tables and columns have mirrored to OneLake and the
 SQL analytics endpoint before deploying or refreshing the semantic model.
 Mirroring is asynchronous; an endpoint metadata refresh may be required.
+The draft teacher directory additionally requires `sql/analytics-teacher.sql`
+and `sql/validate-analytics-teacher.sql`. Before creating the snapshot, ensure
+unauthorized users cannot access the source or mirrored paths. Then configure
+and test table-specific controls before allowing consumers to use them. The
+creation script requires the explicit SQLCMD variable
+`AllowTeacherSnapshot=true`; that acknowledgement does not prove security.
+The directory is a snapshot; the creation script does not refresh it when its
+source changes.
 
 ## Deploy and test
 
@@ -241,6 +259,17 @@ establish permissions for a future pipeline identity.
 
 `scripts/deploy-semantic-model.ps1` deploys the parameterized model to a
 workspace after checking that the database exists and the model name is unused.
+Both it and `scripts/update-semantic-model.ps1` refuse to run while
+`semantic-model/DEPLOYMENT_BLOCKED` exists. Remove the marker only after the
+documented cross-surface access tests pass; the marker is a safety reminder,
+not an access control and does not prevent other deployment methods.
+To test the draft model with restricted identities, use a separate isolated
+development copy and workspace after securing the source and mirrored paths.
+Remove the marker in that test copy only, and keep it in the release checkout
+until the required tests pass.
+For an update, capture a fresh published-definition baseline and include the
+learner, teacher, role, and model parts together. The update helper preserves
+other published parts and rejects a baseline that no longer matches.
 `scripts/deploy-data-agents.ps1` creates and publishes the configured agents;
 its update mode requires explicit `-UpdateExisting`. Inspect drafts, selections,
 runtime settings, and permissions before publishing. Do not use these scripts
@@ -260,6 +289,7 @@ For local unit tests:
 py -3 -m venv .venv
 .\.venv\Scripts\python -m pip install -r requirements.txt
 .\.venv\Scripts\python -m unittest discover -s tests -v
+pwsh -NoProfile -File .\tests\test_semantic_model_gate.ps1
 ```
 
 Local unit tests do not validate live Fabric permissions, mirroring, or
