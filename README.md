@@ -112,9 +112,10 @@ bypass tests remain outstanding.
 | `sql/` | Operational schema, deterministic seed and names, analytical snapshots, migration, and validation queries. |
 | `semantic-model/` | Parameterized TMDL definition and proposed, unvalidated security role. |
 | `fabric/` | Data Agent and Foundry instructions, test questions, and the SQL Bronze table contract. |
-| `scripts/` | PowerShell deployment helpers and Python Foundry deployment, query, and evaluation helpers. |
-| `tests/` | Local tests for the Foundry helpers and Lakehouse provisioning. |
+| `scripts/` | PowerShell deployment helpers and Python Foundry and synthetic timetable helpers. |
+| `tests/` | Local tests for the Foundry helpers, Lakehouse provisioning, and timetable generator. |
 | `docs/medallion-architecture.md` | Target data flow, agent-ready models and security gates. |
+| `docs/timetable-source.md` | Local timetable source contract and generation limits. |
 | `AGENTS.md` | Project requirements, deployment status, security constraints, and pending acceptance gates. |
 | `settings.example.ps1` | Local configuration template; no credentials belong in this file. |
 
