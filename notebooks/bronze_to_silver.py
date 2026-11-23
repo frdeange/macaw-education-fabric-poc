@@ -302,8 +302,8 @@ observed_attendance = (
     .where((F.col("CalendarDate") <= snapshot_date) & F.col("IsInstructionDay"))
 )
 require(
-    observed_attendance.count() == 315842,
-    "Observed attendance must include only instructional student-days through the snapshot date.",
+    observed_attendance.count() == expected_counts["Attendance"],
+    "Observed attendance must include all instructional student-days through the snapshot date.",
 )
 
 attendance_context = (
@@ -527,7 +527,7 @@ silver_outputs = {
 expected_output_counts = {
     "fact_enrollment": 5600,
     "fact_subject_enrollment": 43550,
-    "fact_attendance": 315842,
+    "fact_attendance": 336000,
     "fact_assessment_result": 87100,
 }
 for table_name, expected_count in expected_output_counts.items():
@@ -557,7 +557,7 @@ silver_manifest = spark.createDataFrame(
         json.dumps(actual_counts, sort_keys=True),
         5600,
         43550,
-        315842,
+        336000,
         87100,
     )],
     [
@@ -575,5 +575,5 @@ silver_manifest = spark.createDataFrame(
 
 print(
     f"Validated batch {batch_id}: 5,600 enrollments, 43,550 subject enrollments, "
-    "315,842 observed student-days, and 87,100 assessment results."
+    "336,000 observed student-days, and 87,100 assessment results."
 )

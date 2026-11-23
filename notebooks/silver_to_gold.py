@@ -162,7 +162,7 @@ expected_totals = {
     "gold_enrollment_by_year_level": ("student_count", 5600),
     "gold_class_section_sizes": ("student_count", 5600),
     "gold_subject_enrollment": ("student_count", 43550),
-    "gold_attendance_by_campus_day": ("observed_attendance_records", 315842),
+    "gold_attendance_by_campus_day": ("observed_attendance_records", 336000),
     "gold_assessment_results": ("assessment_result_count", 87100),
 }
 actual_totals = {}
@@ -239,5 +239,5 @@ published = spark.createDataFrame(
 
 print(
     f"Validated Gold batch {batch_id}: 5,600 enrollments, 43,550 subject enrollments, "
-    "315,842 observed student-days, and 87,100 assessment results."
+    "336,000 observed student-days, and 87,100 assessment results."
 )

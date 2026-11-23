@@ -124,8 +124,10 @@ sensitive characteristics from names or create real contact details.
   (public preview), with Azure PostgreSQL Flexible Server as the approved
   fallback if HorizonDB is unavailable. Gold-backed models will serve the two
   Data Agents and Foundry. See `docs/medallion-architecture.md`. The three
-  Lakehouses and SQL endpoints exist; Bronze also has individual shortcuts to
-  allowlisted SQL mirror tables, but no materialized data.
+  Lakehouses and SQL endpoints exist; Bronze has individual shortcuts to
+  allowlisted SQL mirror tables. The corrected SQL-mirror-only pipeline has
+  materialized and validated Silver and Gold products; restricted-user access
+  remains unverified.
 - Design the semantic model around clear facts, dimensions, relationships,
   measures, and documented denominators. Prefer the mirrored OneLake data and
   validate the supported storage mode and security behaviour in the target
@@ -193,17 +195,23 @@ sensitive characteristics from names or create real contact details.
 
 - Three schema-enabled Lakehouses, `MacawEducationBronze`,
   `MacawEducationSilver` and `MacawEducationGold`, have been created in the
-  project workspace. Their SQL endpoints are ready and administrator queries
-  confirmed zero `dbo` tables. `Macaw Bronze to Silver` and
-  `Macaw Silver to Gold` notebook definitions were deployed and bound to the
-  Bronze and Silver Lakehouses. The `Macaw Education Medallion` DataPipeline
-  definition was deployed and read back; the four activities, ordered
-  dependency and pipeline parameters were confirmed.
-  It runs the notebooks sequentially and has explicit failed-run activities,
-  but has not been run; no Spark job or data materialization occurred. No
-  schedule, external failure-notification connection, or permissions were
-  configured. HorizonDB and Gold-backed models remain planned; restricted-user
-  access to the Lakehouses and their endpoints is unverified.
+  project workspace. `Macaw Bronze to Silver` and `Macaw Silver to Gold`
+  notebook definitions were deployed and bound to the Bronze and Silver
+  Lakehouses. The `Macaw Education Medallion` DataPipeline definition was
+  deployed and read back; its four activities, ordered dependency and
+  pipeline parameters were confirmed. The first run failed twice in
+  Bronze-to-Silver because the 315,842 Present-or-Late attendance numerator
+  was mistakenly used as the expected total record count. The corrected
+  count is 336,000 observed instructional student-days through the snapshot
+  date. A subsequent run completed both notebook activities. SQL endpoint
+  validation confirmed Silver fact counts of 5,600, 43,550, 336,000 and
+  87,100, plus validated Silver and Gold manifests. Gold aggregate totals
+  are 5,600 enrollment learners, 5,600 class-size learners, 43,550 subject
+  enrollments, 336,000 attendance records and 87,100 assessment results.
+  The Present-or-Late numerator remains 315,842. No schedule, external
+  failure-notification connection or permissions were configured. HorizonDB
+  and Gold-backed models remain planned; restricted-user access to the
+  Lakehouses and their endpoints is unverified.
 - Bronze contains 20 individual OneLake shortcuts to the operational SQL
   mirror under `Files/sql_mirror/`, as listed in
   `fabric/sql-bronze-tables.json`. The old `Analytics*` tables and
@@ -262,10 +270,11 @@ sensitive characteristics from names or create real contact details.
   have the semantic model as their only published source and their configured
   English instructions and intended table selections were verified after
   publication. MCP tests returned the expected 5,600 students, 87,100
-  assessment results, and 315,842 / 336,000 observed attendance records
-  (94.00%). A test asking how many students take Dutch at each campus returned
-  the unfiltered campus totals and invented a Dutch department. This is
-  incorrect. That test predates the new subject-enrollment model. Both agents
+  assessment results, and 315,842 Present-or-Late records out of 336,000
+  observed attendance records (94.00%). A test asking how many students take
+  Dutch at each campus returned the unfiltered campus totals and invented a
+  Dutch department. This is incorrect. That test predates the new
+  subject-enrollment model. Both agents
   have since been republished with the updated local configuration. In
   administrator MCP smoke tests, School Operations returned the expected 960
   Dutch students at each campus and Learning Outcomes returned 87,100
@@ -409,13 +418,12 @@ sensitive characteristics from names or create real contact details.
    the evaluator's threshold, trace inputs, temporal scope, and safety
    criteria. Register or verify any suite before claiming one exists. Run a
    batch evaluation only after the project owner approves it.
-7. Execute and validate the deployed SQL-mirror notebook slice, including
-   retry and incomplete-batch behavior; configure an approved external failure
-   notification if required; integrate timetable and facilities sources when
-   available; then add Gold-backed agent-ready models and delegated agent
-   integration. Notebook and pipeline definitions are deployed, but no Spark
-   run or materialized Silver/Gold output is verified. Do not share a new
-   surface or report data products as deployed until their corresponding tests
+7. Preserve the verified SQL-mirror notebook slice and pipeline run; configure
+   an approved external failure notification if required; integrate timetable
+   and facilities sources when available; then add Gold-backed agent-ready
+   models and delegated agent integration. Silver and Gold counts and
+   manifests are validated as an administrator, but restricted-user access
+   remains unverified. Do not share a new surface until its security tests
    pass.
 
 ## Suggested Prep data for AI review

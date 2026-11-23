@@ -45,14 +45,15 @@ The approved design consolidates the existing SQL mirror, synthetic timetable
 files and a PostgreSQL facilities source through separate Bronze, Silver and
 Gold Lakehouses. Two Gold-backed semantic models will serve the Data Agents
 and Foundry. Fabric HorizonDB is the preferred PostgreSQL source; it is a
-public preview. The three Lakehouses have no materialized tables. Bronze now
-has 20 administrator-verified shortcuts to allowlisted SQL-mirror
-tables. The repository now includes a SQL-mirror-only Bronze-to-Silver-to-Gold
-notebook slice. Both definitions are deployed with discovered Lakehouse
-bindings, and the sequential `Macaw Education Medallion` pipeline definition
-is deployed. It has not been run: no Spark job has run and no Silver or Gold
-tables have been materialized. The pipeline has no schedule and no external
-failure notification connection.
+public preview. Bronze has 20 administrator-verified shortcuts to
+allowlisted SQL-mirror tables. The SQL-mirror-only Bronze-to-Silver-to-Gold
+notebook slice and sequential `Macaw Education Medallion` pipeline are
+deployed. The first run exposed an attendance-count contract error: 315,842 is
+the Present-or-Late numerator, while 336,000 is the total observed
+instructional student-days. After correcting the contract, the pipeline
+completed. Silver and Gold products and validated manifests were read back
+through their SQL analytics endpoints. The pipeline has no schedule or
+external failure-notification connection.
 See the [medallion design](./docs/medallion-architecture.md) for source,
 security and validation requirements.
 
@@ -92,7 +93,7 @@ counts across subjects or departments can overlap.
 | Semantic model | Direct Lake model deployed and checked against SQL using an administrator identity. Its row-level security is **not validated**. Name fields are intentionally not in the published model. |
 | Data Agents | Both agents are published but unshared. Administrator smoke tests returned 960 Dutch students per campus and 87,100 assessment results; individual-subject attendance was correctly declined. These tests do not establish general reliability or restricted-user isolation. |
 | Foundry | A prompt agent with two delegated Fabric IQ connections was deployed and smoke-tested as an administrator. Version 1 predates the subject-enrollment instruction update; restricted-user access is unverified. |
-| Medallion architecture | Three schema-enabled Lakehouses and their SQL endpoints are deployed. Bronze has 20 allowlisted SQL-mirror shortcuts, verified as an administrator. Two SQL-mirror-only notebook definitions and the sequential `Macaw Education Medallion` pipeline definition are deployed; the pipeline item and notebook references were verified. It has not been run, so no Silver/Gold tables are materialized. It has no schedule or external failure notification connection. Timetable and facilities integration, Gold-backed models, and restricted-user access remain pending. |
+| Medallion architecture | Three schema-enabled Lakehouses and their SQL endpoints are deployed. Bronze has 20 allowlisted SQL-mirror shortcuts, verified as an administrator. The SQL-mirror-only notebooks and sequential pipeline are deployed. After correcting the attendance row-count contract, a pipeline run completed; SQL endpoint readback confirmed Silver facts (5,600 enrollments, 43,550 subject enrollments, 336,000 attendance records, 87,100 assessment results) and Gold aggregate totals with validated manifests. Restricted-user access remains unverified. The pipeline has no schedule or external failure-notification connection. Timetable and facilities integration and Gold-backed agent models remain pending. |
 | GraphQL | Planned only; no API, generated schema, or security validation has been completed. |
 | Evaluation | Generated questions and a custom evaluator are unreviewed drafts. No batch evaluation or remote evaluation suite has been verified. |
 

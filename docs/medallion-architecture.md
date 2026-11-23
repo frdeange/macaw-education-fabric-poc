@@ -3,12 +3,14 @@
 This is the target architecture for [issue #7](https://github.com/frdeange/macaw-education-fabric-poc/issues/7).
 The existing SQL database, its OneLake mirror, the initial semantic model,
 the unshared Data Agents and the Foundry agent remain the current deployment.
-The three schema-enabled Lakehouses are deployed without materialized tables;
-their SQL endpoints accepted administrator queries. Bronze contains 20
-individual shortcuts to the SQL mirror, verified with the workspace
-administrator. Physical ingestion, the HorizonDB source and the Gold-backed
-models described here have not yet been deployed or validated. Restricted-user
-access to the Lakehouses and their endpoints is unverified.
+The three schema-enabled Lakehouses are deployed and their SQL endpoints are
+available. Bronze contains 20 individual shortcuts to the SQL mirror, verified
+with the workspace administrator. The first SQL-mirror-only Silver/Gold
+pipeline run completed after an attendance-count contract correction; its
+products and validated manifests were read back through the SQL analytics
+endpoints. Physical ingestion of the additional sources, the HorizonDB source
+and Gold-backed models described here have not yet been deployed or validated.
+Restricted-user access to the Lakehouses and their endpoints is unverified.
 
 ## Data flow
 
@@ -111,15 +113,19 @@ the observation snapshot are schedules, not observed facts.
 
 The `Macaw Education Medallion` DataPipeline definition is deployed. It runs
 Bronze-to-Silver before Silver-to-Gold, passes the snapshot date and batch ID
-as pipeline parameters, and retries each notebook once. The notebooks use
-overwrite writes; the Silver staging manifest and Gold validation gate are
-intended to prevent a failed Silver batch from being consumed. Failed notebook
-activities route to explicit `Fail` activities, so the pipeline run fails with
-a domain-specific error. These retry and failure paths have not been exercised.
-No schedule or trigger is configured. No email or Teams connection or
-destination was specified, so the pipeline does not send an external failure
-notification; the failed run is visible in Fabric monitoring. Retain the
-current deployment as a rollback path until cutover is verified.
+as pipeline parameters, and retries each notebook once. Its first run failed
+twice in Bronze-to-Silver because the notebook compared total observed
+attendance records with the Present-or-Late numerator: 315,842 instead of
+336,000. The source SQL query confirmed 336,000 instructional student-day
+records through the snapshot date, of which 315,842 are Present or Late. The
+Silver and Gold count contracts now use the 336,000 record total. A subsequent
+pipeline run completed, and both SQL analytics endpoints confirmed the
+materialized outputs and `Validated` manifests. The Gold endpoint metadata was
+refreshed before its readback. The notebook retry and explicit failure paths
+were exercised by the initial failed run. No schedule or trigger is
+configured. No email or Teams connection or destination was specified, so the
+pipeline does not send an external failure notification. Restricted-user
+access remains unverified.
 
 ### First SQL-mirror transformation slice
 
@@ -156,8 +162,14 @@ The notebooks write batch lineage and a one-row manifest. The Gold manifest's
 the Lakehouse tables and their SQL endpoints remain unverified for restricted
 users and must not be shared. The current static row-count contract is tied to
 the reviewed snapshot and must be deliberately revised for a different source
-snapshot. The notebook definitions have not yet been executed against Fabric;
-there is no claim that Silver or Gold tables have been materialized.
+snapshot. The completed run was validated through the SQL analytics endpoints:
+Silver contains 5,600 enrollment, 43,550 subject-enrollment, 336,000
+student-day attendance and 87,100 assessment-result rows. Gold aggregate
+measures total 5,600 enrollment learners, 5,600 class-size learners, 43,550
+subject enrollments, 336,000 attendance records and 87,100 assessment
+results. The attendance numerator remains 315,842 Present-or-Late records;
+its denominator is 336,000 observed records. These administrator checks do
+not establish restricted-user security or row-level equality with the source.
 
 [`notebook_authoring.py`](../scripts/notebook_authoring.py) builds notebook
 definitions with discovered workspace and default-Lakehouse bindings.
@@ -168,10 +180,10 @@ defines the ordered activities and their failure paths;
 [`deploy-medallion-pipeline.ps1`](../scripts/deploy-medallion-pipeline.ps1)
 deployed the `Macaw Education Medallion` item. A definition readback confirmed
 its four activities, ordered dependency, and both pipeline parameters. The
-pipeline has not been run, so no Silver or Gold table is materialized or
-validated in Fabric. Definition deployment does not verify notebook runtime
-behavior, mirror freshness, external failure alerts, restricted-user access,
-or cross-Lakehouse data permissions.
+corrected pipeline run completed and its Silver/Gold outputs and manifests
+were validated through the SQL analytics endpoints. Definition deployment
+does not verify mirror freshness, external failure alerts, restricted-user
+access, or cross-Lakehouse data permissions.
 
 ## Semantic models and agents
 

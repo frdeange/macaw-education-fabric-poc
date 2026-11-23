@@ -40,6 +40,24 @@ class MedallionNotebookTests(unittest.TestCase):
         )
         self.assertEqual(expected_counts, count_baseline["tableCounts"])
 
+    def test_attendance_output_contract_matches_observed_source_rows(self):
+        source_counts = assignment_value(
+            ROOT / "notebooks" / "bronze_to_silver.py", "expected_counts"
+        )
+        silver_counts = assignment_value(
+            ROOT / "notebooks" / "bronze_to_silver.py", "expected_output_counts"
+        )
+        gold_totals = assignment_value(
+            ROOT / "notebooks" / "silver_to_gold.py", "expected_totals"
+        )
+
+        observed_source_rows = source_counts["Attendance"]
+        self.assertEqual(silver_counts["fact_attendance"], observed_source_rows)
+        self.assertEqual(
+            gold_totals["gold_attendance_by_campus_day"],
+            ("observed_attendance_records", observed_source_rows),
+        )
+
     def test_built_notebooks_have_fabric_binding_and_valid_code_cells(self):
         parameters = {
             "bronze_lakehouse_name": "MacawEducationBronze",
