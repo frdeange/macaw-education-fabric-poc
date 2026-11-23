@@ -109,9 +109,16 @@ its rate is `(Present + Late) / all observed attendance records`. Do not
 produce lesson- or subject-level attendance from a timetable join. Dates after
 the observation snapshot are schedules, not observed facts.
 
-A parameterized pipeline runs validation and materialization in order. Record
-batch lineage and freshness, make retries safe, surface failures, and prevent
-an incomplete batch from replacing a validated Gold release. Retain the
+The `Macaw Education Medallion` DataPipeline definition is deployed. It runs
+Bronze-to-Silver before Silver-to-Gold, passes the snapshot date and batch ID
+as pipeline parameters, and retries each notebook once. The notebooks use
+overwrite writes; the Silver staging manifest and Gold validation gate are
+intended to prevent a failed Silver batch from being consumed. Failed notebook
+activities route to explicit `Fail` activities, so the pipeline run fails with
+a domain-specific error. These retry and failure paths have not been exercised.
+No schedule or trigger is configured. No email or Teams connection or
+destination was specified, so the pipeline does not send an external failure
+notification; the failed run is visible in Fabric monitoring. Retain the
 current deployment as a rollback path until cutover is verified.
 
 ### First SQL-mirror transformation slice
@@ -156,10 +163,15 @@ there is no claim that Silver or Gold tables have been materialized.
 definitions with discovered workspace and default-Lakehouse bindings.
 [`deploy-medallion-notebooks.ps1`](../scripts/deploy-medallion-notebooks.ps1)
 deployed both definitions successfully and does not run Spark or grant access.
-The definitions are persisted in the workspace; no notebook run has occurred,
-so no Silver or Gold table is materialized or validated in Fabric. This
-administrator deployment does not verify restricted-user access, notebook
-runtime behavior, mirror freshness, or cross-Lakehouse data permissions.
+[`medallion-pipeline-content.json`](../fabric/medallion-pipeline-content.json)
+defines the ordered activities and their failure paths;
+[`deploy-medallion-pipeline.ps1`](../scripts/deploy-medallion-pipeline.ps1)
+deployed the `Macaw Education Medallion` item. A definition readback confirmed
+its four activities, ordered dependency, and both pipeline parameters. The
+pipeline has not been run, so no Silver or Gold table is materialized or
+validated in Fabric. Definition deployment does not verify notebook runtime
+behavior, mirror freshness, external failure alerts, restricted-user access,
+or cross-Lakehouse data permissions.
 
 ## Semantic models and agents
 
