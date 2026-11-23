@@ -12,7 +12,7 @@ Dutch curricula or regulations.
 > permission checks. Do not expose names or other records to consumers until
 > the relevant controls and bypass tests pass.
 
-## Architecture
+## Current deployed architecture
 
 ```text
 Synthetic SQL seed
@@ -38,6 +38,16 @@ Fabric SQL Database -- asynchronous mirroring --> OneLake
 The published Data Agent MCP endpoints provide conversational access. The
 proposed GraphQL API is **not deployed**. The intended external consumers are
 users in the same Microsoft Entra tenant, using delegated identities.
+
+## Target medallion architecture
+
+The approved design consolidates the existing SQL mirror, synthetic timetable
+files and a PostgreSQL facilities source through separate Bronze, Silver and
+Gold Lakehouses. Two Gold-backed semantic models will serve the Data Agents
+and Foundry. Fabric HorizonDB is the preferred PostgreSQL source; it is a
+public preview. The target architecture is **not yet deployed**.
+See the [medallion design](./docs/medallion-architecture.md) for source,
+security and validation requirements.
 
 ## Scenario
 
@@ -75,6 +85,7 @@ counts across subjects or departments can overlap.
 | Semantic model | Direct Lake model deployed and checked against SQL using an administrator identity. Its row-level security is **not validated**. Name fields are intentionally not in the published model. |
 | Data Agents | Both agents are published but unshared. Administrator smoke tests returned 960 Dutch students per campus and 87,100 assessment results; individual-subject attendance was correctly declined. These tests do not establish general reliability or restricted-user isolation. |
 | Foundry | A prompt agent with two delegated Fabric IQ connections was deployed and smoke-tested as an administrator. Version 1 predates the subject-enrollment instruction update; restricted-user access is unverified. |
+| Medallion architecture | Planned; the three Lakehouses, PostgreSQL facilities source and Gold-backed models are not yet deployed. |
 | GraphQL | Planned only; no API, generated schema, or security validation has been completed. |
 | Evaluation | Generated questions and a custom evaluator are unreviewed drafts. No batch evaluation or remote evaluation suite has been verified. |
 
@@ -87,8 +98,9 @@ The source SQL database and its mirrored OneLake and SQL analytics endpoint
 already contain the synthetic names. Their presence is not a security guarantee:
 source permissions do not automatically protect the mirrored paths. Semantic
 model row-level security also does not automatically protect those paths or a
-future GraphQL API. `SecurityAccessGrant` is empty, and the access matrix,
-Entra groups, and restricted test users are still needed.
+future GraphQL API. `SecurityAccessGrant` contains staged test pairs, but those
+records do not enforce security or grant user access. Restricted-user and
+bypass tests remain outstanding.
 
 ## Repository layout
 
@@ -99,6 +111,7 @@ Entra groups, and restricted test users are still needed.
 | `fabric/` | Data Agent and Foundry agent instructions and test questions. |
 | `scripts/` | PowerShell deployment helpers and Python Foundry deployment, query, and evaluation helpers. |
 | `tests/` | Local unit tests for the Foundry helpers. |
+| `docs/medallion-architecture.md` | Target data flow, agent-ready models and security gates. |
 | `AGENTS.md` | Project requirements, deployment status, security constraints, and pending acceptance gates. |
 | `settings.example.ps1` | Local configuration template; no credentials belong in this file. |
 

@@ -118,6 +118,13 @@ sensitive characteristics from names or create real contact details.
 - Fabric SQL Database is the operational source. Its supported tables are
   mirrored to OneLake and made available through a SQL analytics endpoint;
   replication is asynchronous. Verify mirroring before downstream validation.
+- The target medallion design uses separate Bronze, Silver and Gold Lakehouses
+  in one suitable development workspace. Ingest the SQL mirror, synthetic
+  timetable CSV files and a synthetic facilities source in Fabric HorizonDB
+  (public preview), with Azure PostgreSQL Flexible Server as the approved
+  fallback if HorizonDB is unavailable. Gold-backed models will serve the two
+  Data Agents and Foundry. See `docs/medallion-architecture.md`. These target
+  artifacts are not yet deployed.
 - Design the semantic model around clear facts, dimensions, relationships,
   measures, and documented denominators. Prefer the mirrored OneLake data and
   validate the supported storage mode and security behaviour in the target
@@ -131,14 +138,14 @@ sensitive characteristics from names or create real contact details.
   endpoints. For structured access, use Fabric API for GraphQL with delegated
   Microsoft Entra authentication and only the intended read-only objects and
   operations. Validate actual permissions and the generated API schema.
-- Implement real access restrictions by campus and department. Confirm the
-  actual access matrix with the project owner. Access is granted to specific
-  campus/department pairs, not the cross-product of separate campus and
-  department lists. For enrolment and attendance, a department-restricted
-  user may see only students taking at least one subject in an authorized
-  department at an authorized campus. Apply the same rule to every exposed
-  path, and test with appropriately restricted users, not only workspace
-  administrators.
+- Implement real access restrictions by campus and department. The owner
+  authorized the selected test identities and their pair grants. Access is
+  granted to specific campus/department pairs, not the cross-product of
+  separate campus and department lists. For enrolment and attendance, a
+  department-restricted user may see only students taking at least one subject
+  in an authorized department at an authorized campus. Apply the same rule to
+  every exposed path, and test with appropriately restricted users, not only
+  workspace administrators.
 - Security is a cross-surface requirement. Semantic-model RLS does not
   automatically secure GraphQL, the source SQL database, the mirrored SQL
   analytics endpoint, or OneLake. Source database granular security is not
@@ -183,6 +190,8 @@ sensitive characteristics from names or create real contact details.
 
 ## Deployment status
 
+- The medallion architecture, HorizonDB facilities source and Gold-backed
+  models are planned; none has been deployed or validated.
 - The Fabric SQL database `MacawEducation` was created in the project
   workspace.
 - The database is reachable with SQLCMD using a SQL token acquired for the
@@ -194,9 +203,14 @@ sensitive characteristics from names or create real contact details.
   source database. Mirroring is asynchronous.
 - Six additional analytical tables have been materialized in SQL and mirrored.
   Their learner, learner-department, attendance, and assessment counts are
-  5,600, 31,450, 336,000, and 87,100 respectively on the analytics endpoint;
-  `SecurityAccessGrant` has no rows. These tables are a snapshot: subsequent
-  operational changes do not automatically update them.
+  5,600, 31,450, 336,000, and 87,100 respectively on the analytics endpoint.
+  These tables are a snapshot: subsequent operational changes do not
+  automatically update them.
+- `SecurityAccessGrant` contains nine staged campus-department pairs for five
+  generic test identities; two additional identities have no grants. The SQL
+  source and mirrored endpoint match, and an administrator model query returned
+  nine records for five principals. The records do not grant access or enforce
+  security; restricted-user tests and role membership remain unverified.
 - `AnalyticsSubjectEnrollment` has been created and validated in the source SQL
   database and mirrored to the SQL analytics endpoint. It contains 43,550
   distinct student-subject rows, including 960 Dutch students at each campus.
@@ -339,10 +353,11 @@ sensitive characteristics from names or create real contact details.
   snapshot. Do not rerun them against existing data without inspecting the
   target. Never save access tokens in project files or command arguments.
 - The project owner chose pair-specific campus/department access and
-  department-student restrictions for enrolment and attendance. Entra groups,
-  their actual access matrix, and restricted test identities will be provided
-  later. Do not share or advertise an external endpoint as securely isolated
-  before the relevant access tests pass.
+  department-student restrictions for enrolment and attendance. The staged
+  test mapping uses individual user principal names, not Entra groups.
+  Effective permissions and restricted-user behavior remain unverified. Do not
+  share or advertise an external endpoint as securely isolated before the
+  relevant access tests pass.
 
 ## Pending acceptance gates
 
@@ -353,9 +368,10 @@ sensitive characteristics from names or create real contact details.
 2. Names are populated and mirrored, but are not yet in the semantic model or
    Data Agents. Configure and test access controls before adding them to any
    consumer-facing demo surface.
-3. Obtain the campus/department pair grants, their Entra group memberships,
-   and restricted test users. Define how those grants map to effective user
-   identities; an empty `SecurityAccessGrant` is not a deployed policy.
+3. Configure and verify the test identities' effective permissions and model
+   role membership in an isolated environment. The staged direct-principal
+   records are not a deployed policy; manage role membership in the Power BI
+   portal after the relevant source protections are in place.
 4. Configure and verify security independently for the operational SQL
    database, mirrored SQL analytics endpoint, semantic model, OneLake,
    Data Agents, GraphQL, and Foundry. Test allowed and denied pairs, overlapping
@@ -371,6 +387,9 @@ sensitive characteristics from names or create real contact details.
    the evaluator's threshold, trace inputs, temporal scope, and safety
    criteria. Register or verify any suite before claiming one exists. Run a
    batch evaluation only after the project owner approves it.
+7. Implement and validate the approved medallion data flow, Gold-backed
+   agent-ready models and delegated agent integration. Do not share a new
+   surface or report it as deployed until its corresponding tests pass.
 
 ## Suggested Prep data for AI review
 
