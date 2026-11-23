@@ -1,0 +1,25 @@
+{
+  "sourceSchema": "dbo",
+  "tables": [
+    { "name": "AcademicYear", "keyColumns": ["AcademicYearKey"] },
+    { "name": "Assessment", "keyColumns": ["AssessmentKey"] },
+    { "name": "AssessmentResult", "keyColumns": ["AssessmentKey", "EnrollmentKey"] },
+    { "name": "Attendance", "keyColumns": ["EnrollmentKey", "SchoolCalendarKey"] },
+    { "name": "Campus", "keyColumns": ["CampusKey"] },
+    { "name": "ClassSection", "keyColumns": ["ClassSectionKey"] },
+    { "name": "DateDimension", "keyColumns": ["DateKey"] },
+    { "name": "Department", "keyColumns": ["DepartmentKey"] },
+    { "name": "EducationProfile", "keyColumns": ["ProfileKey"] },
+    { "name": "Enrollment", "keyColumns": ["EnrollmentKey"] },
+    { "name": "EnrollmentSubject", "keyColumns": ["EnrollmentKey", "TeachingAssignmentKey"] },
+    { "name": "LoadMetadata", "keyColumns": ["LoadKey"] },
+    { "name": "ProgrammeTrack", "keyColumns": ["TrackKey"] },
+    { "name": "SchoolCalendar", "keyColumns": ["SchoolCalendarKey"] },
+    { "name": "SchoolUnit", "keyColumns": ["SchoolUnitKey"] },
+    { "name": "Student", "keyColumns": ["StudentKey"] },
+    { "name": "Subject", "keyColumns": ["SubjectKey"] },
+    { "name": "Teacher", "keyColumns": ["TeacherKey"] },
+    { "name": "TeachingAssignment", "keyColumns": ["TeachingAssignmentKey"] },
+    { "name": "YearLevel", "keyColumns": ["YearLevelKey"] }
+  ]
+}

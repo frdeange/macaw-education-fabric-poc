@@ -3,10 +3,12 @@
 This is the target architecture for [issue #7](https://github.com/frdeange/macaw-education-fabric-poc/issues/7).
 The existing SQL database, its OneLake mirror, the initial semantic model,
 the unshared Data Agents and the Foundry agent remain the current deployment.
-The three schema-enabled Lakehouses are deployed but empty; their SQL endpoints
-accepted administrator queries. Ingestion, the HorizonDB source and the
-Gold-backed models described here have not yet been deployed or validated.
-Restricted-user access to the Lakehouses and their endpoints is unverified.
+The three schema-enabled Lakehouses are deployed without materialized tables;
+their SQL endpoints accepted administrator queries. Bronze contains 20
+individual shortcuts to the SQL mirror, verified with the workspace
+administrator. Physical ingestion, the HorizonDB source and the Gold-backed
+models described here have not yet been deployed or validated. Restricted-user
+access to the Lakehouses and their endpoints is unverified.
 
 ## Data flow
 
@@ -49,6 +51,28 @@ if a shortcut is unsupported, evaluate a documented route from the mirrored
 analytical copy rather than silently reading the operational database. Monitor
 each table's initial copy, later changes and reseeds. A mirror is a current
 replica, not an immutable change history or a freshness guarantee.
+
+The SQL mirror's 20 operational tables are enumerated, with their source keys,
+in [`sql-bronze-tables.json`](../fabric/sql-bronze-tables.json). Individual
+shortcuts under Bronze `Files/sql_mirror/` point only to those tables; the
+`Analytics*` snapshots and `SecurityAccessGrant` are excluded. The deployment
+script verifies the actual shortcut targets and access to their Delta-log
+directories, and does not overwrite existing paths. These checks do not prove
+that a separately configured pipeline identity can use the shortcuts, nor
+that the mirror is complete or current. No access grants were made.
+
+An administrator compared counts for all 20 operational source tables with
+the SQL analytics endpoint; they matched, including 5,600 students, 240
+teachers, 280 sections, 336,000 student-day records, 87,100 assessment results
+and 43,550 subject-enrollment records. The source change-feed procedure
+reported state `Active` for all 20, and the declared key columns matched the
+source primary keys. These are point-in-time checks, not a cross-table
+transaction, proof of row-by-row equality, or a freshness SLA.
+The independently captured counts are retained in
+[`sql-bronze-baseline.json`](../fabric/sql-bronze-baseline.json), separate
+from future Bronze output; they apply only to the recorded synthetic snapshot.
+Initial-copy and per-table mirror monitoring, source changes and the actual
+pipeline identity still need validation before a batch is treated as current.
 
 For CSV deliveries, the first demo may upload files directly to the Lakehouse
 `Files` area. Subsequent deliveries use a repeatable, authenticated upload.
