@@ -118,6 +118,13 @@ sensitive characteristics from names or create real contact details.
 - Fabric SQL Database is the operational source. Its supported tables are
   mirrored to OneLake and made available through a SQL analytics endpoint;
   replication is asynchronous. Verify mirroring before downstream validation.
+- The target medallion design uses separate Bronze, Silver and Gold Lakehouses
+  in one suitable development workspace. Ingest the SQL mirror, synthetic
+  timetable CSV files and a synthetic facilities source in Fabric HorizonDB
+  (public preview), with Azure PostgreSQL Flexible Server as the approved
+  fallback if HorizonDB is unavailable. Gold-backed models will serve the two
+  Data Agents and Foundry. See `docs/medallion-architecture.md`. These target
+  artifacts are not yet deployed.
 - Design the semantic model around clear facts, dimensions, relationships,
   measures, and documented denominators. Prefer the mirrored OneLake data and
   validate the supported storage mode and security behaviour in the target
@@ -134,12 +141,11 @@ sensitive characteristics from names or create real contact details.
 - Implement real access restrictions by campus and department. The project
   owner authorized the selection of test identities and their pair grants;
   see `docs/security-test-matrix.md`. Access is granted to specific
-  campus/department pairs, not the cross-product of separate campus and
-  department lists. For enrolment and attendance, a department-restricted
-  user may see only students taking at least one subject in an authorized
-  department at an authorized campus. Apply the same rule to every exposed
-  path, and test with appropriately restricted users, not only workspace
-  administrators.
+  campus-department pairs, not the cross-product of separate campus and department
+  lists. For enrolment and attendance, a department-restricted user may see
+  only students taking at least one subject in an authorized department at an
+  authorized campus. Apply the same rule to every exposed path, and test with
+  appropriately restricted users, not only workspace administrators.
 - Security is a cross-surface requirement. Semantic-model RLS does not
   automatically secure GraphQL, the source SQL database, the mirrored SQL
   analytics endpoint, or OneLake. Source database granular security is not
@@ -184,6 +190,8 @@ sensitive characteristics from names or create real contact details.
 
 ## Deployment status
 
+- The medallion architecture, HorizonDB facilities source and Gold-backed
+  models are planned; none has been deployed or validated.
 - The Fabric SQL database `MacawEducation` was created in the project
   workspace.
 - The database is reachable with SQLCMD using a SQL token acquired for the
@@ -397,6 +405,9 @@ sensitive characteristics from names or create real contact details.
    the evaluator's threshold, trace inputs, temporal scope, and safety
    criteria. Register or verify any suite before claiming one exists. Run a
    batch evaluation only after the project owner approves it.
+7. Implement and validate the approved medallion data flow, Gold-backed
+   agent-ready models and delegated agent integration. Do not share a new
+   surface or report it as deployed until its corresponding tests pass.
 
 ## Suggested Prep data for AI review
 
