@@ -1,0 +1,28 @@
+{
+  "scenarioVersion": "1.0",
+  "snapshotDate": "2026-11-20",
+  "verificationDateUtc": "2026-11-23",
+  "description": "Administrator-verified source and mirrored SQL counts; not a freshness or security guarantee.",
+  "tableCounts": {
+    "AcademicYear": 1,
+    "Assessment": 4970,
+    "AssessmentResult": 87100,
+    "Attendance": 336000,
+    "Campus": 5,
+    "ClassSection": 280,
+    "DateDimension": 341,
+    "Department": 6,
+    "EducationProfile": 8,
+    "Enrollment": 5600,
+    "EnrollmentSubject": 43550,
+    "LoadMetadata": 1,
+    "ProgrammeTrack": 3,
+    "SchoolCalendar": 1705,
+    "SchoolUnit": 10,
+    "Student": 5600,
+    "Subject": 21,
+    "Teacher": 240,
+    "TeachingAssignment": 2485,
+    "YearLevel": 14
+  }
+}

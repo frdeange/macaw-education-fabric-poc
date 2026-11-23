@@ -123,8 +123,9 @@ sensitive characteristics from names or create real contact details.
   timetable CSV files and a synthetic facilities source in Fabric HorizonDB
   (public preview), with Azure PostgreSQL Flexible Server as the approved
   fallback if HorizonDB is unavailable. Gold-backed models will serve the two
-  Data Agents and Foundry. See `docs/medallion-architecture.md`. These target
-  artifacts are not yet deployed.
+  Data Agents and Foundry. See `docs/medallion-architecture.md`. The three
+  Lakehouses and SQL endpoints exist; Bronze also has individual shortcuts to
+  allowlisted SQL mirror tables, but no materialized data.
 - Design the semantic model around clear facts, dimensions, relationships,
   measures, and documented denominators. Prefer the mirrored OneLake data and
   validate the supported storage mode and security behaviour in the target
@@ -190,8 +191,22 @@ sensitive characteristics from names or create real contact details.
 
 ## Deployment status
 
-- The medallion architecture, HorizonDB facilities source and Gold-backed
-  models are planned; none has been deployed or validated.
+- Three schema-enabled Lakehouses, `MacawEducationBronze`,
+  `MacawEducationSilver` and `MacawEducationGold`, have been created in the
+  project workspace. Their SQL endpoints are ready and administrator queries
+  confirmed zero `dbo` tables. No data was materialized or permissions
+  explicitly granted. HorizonDB and Gold-backed models remain planned;
+  restricted-user access to the Lakehouses and their endpoints is unverified.
+- Bronze contains 20 individual OneLake shortcuts to the operational SQL
+  mirror under `Files/sql_mirror/`, as listed in
+  `fabric/sql-bronze-tables.json`. The old `Analytics*` tables and
+  `SecurityAccessGrant` are excluded. Shortcut targets and Delta-log directory
+  access were checked with the workspace administrator; a separate pipeline
+  identity and restricted users have not been tested. Source and mirrored
+  counts for all 20 tables matched, the declared source primary keys matched,
+  and the source change-feed states were `Active`.
+  These checks do not prove row-level equality, a consistent cross-table
+  snapshot or mirror freshness. Physical Bronze ingestion is still pending.
 - The Fabric SQL database `MacawEducation` was created in the project
   workspace.
 - The database is reachable with SQLCMD using a SQL token acquired for the
