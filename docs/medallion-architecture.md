@@ -52,6 +52,9 @@ The approved Azure PostgreSQL fallback was provisioned before HorizonDB
 availability was confirmed. The server is now Ready in Sweden Central on
 General Purpose D2ads v5 with 32 GiB of storage, Entra-only authentication,
 and public network access disabled. It incurs compute and storage charges.
+The prepared source schema enforces closure-to-room campus consistency, and
+its validator checks the source keys and foreign key. These have only been
+tested locally.
 The empty `macaw_facilities` database, a project-tenant Entra administrator
 and a system-assigned managed identity exist; no Fabric permissions were
 granted to the identity. Connectivity, schema, seed and mirror remain

@@ -1,5 +1,56 @@
 DO $$
 BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM (VALUES
+            ('facility_room', 'p', ARRAY['room_key']::text[], NULL::text, ARRAY[]::text[]),
+            ('facility_closure', 'p', ARRAY['closure_key']::text[], NULL::text, ARRAY[]::text[]),
+            (
+                'facility_closure', 'f', ARRAY['campus_key', 'room_code']::text[],
+                'facility_room', ARRAY['campus_key', 'room_code']::text[]
+            )
+        ) AS required(table_name, constraint_type, columns, referenced_table, referenced_columns)
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM pg_catalog.pg_constraint AS constraint_info
+            INNER JOIN pg_catalog.pg_class AS source
+                ON source.oid = constraint_info.conrelid
+            INNER JOIN pg_catalog.pg_namespace AS source_schema
+                ON source_schema.oid = source.relnamespace
+            LEFT JOIN pg_catalog.pg_class AS referenced
+                ON referenced.oid = constraint_info.confrelid
+            LEFT JOIN pg_catalog.pg_namespace AS referenced_schema
+                ON referenced_schema.oid = referenced.relnamespace
+            WHERE source_schema.nspname = 'public'
+              AND source.relname = required.table_name
+              AND source.relkind = 'r'
+              AND constraint_info.contype::text = required.constraint_type
+              AND constraint_info.convalidated
+              AND ARRAY(
+                  SELECT attribute.attname::text
+                  FROM unnest(constraint_info.conkey) WITH ORDINALITY AS key_column(attnum, position)
+                  INNER JOIN pg_catalog.pg_attribute AS attribute
+                      ON attribute.attrelid = source.oid AND attribute.attnum = key_column.attnum
+                  ORDER BY key_column.position
+              ) = required.columns
+              AND (
+                  required.referenced_table IS NULL
+                  OR (
+                      referenced_schema.nspname = 'public'
+                      AND referenced.relname = required.referenced_table
+                  )
+              )
+              AND ARRAY(
+                  SELECT attribute.attname::text
+                  FROM unnest(constraint_info.confkey) WITH ORDINALITY AS key_column(attnum, position)
+                  INNER JOIN pg_catalog.pg_attribute AS attribute
+                      ON attribute.attrelid = referenced.oid AND attribute.attnum = key_column.attnum
+                  ORDER BY key_column.position
+              ) = required.referenced_columns
+        )
+    ) THEN
+        RAISE EXCEPTION 'Facilities tables must have the expected primary keys and validated campus-room foreign key.';
+    END IF;
     IF (SELECT COUNT(*) FROM public.facility_room) <> 300 THEN
         RAISE EXCEPTION 'Expected 300 synthetic rooms.';
     END IF;

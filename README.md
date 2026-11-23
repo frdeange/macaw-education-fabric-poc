@@ -266,10 +266,18 @@ No HorizonDB item has been created. The source schema is
 generated synthetic seed is `postgres/horizondb_seed.sql`, and post-load
 checks are in [`postgres/horizondb_validate.sql`](./postgres/horizondb_validate.sql).
 The seed contains 300 rooms and 10 future, explicitly planned room closures.
-These scripts have not been run against a live database. The current HorizonDB
-onboarding procedure uses the portal. The signed-in workspace's New item
-catalog did not list HorizonDB; the cause is unconfirmed. A Fabric
-`PostgreSQLDatabase` REST list request succeeded with zero items, but neither
+The source schema enforces each closure's campus-room relationship, and the
+validator checks both primary keys and the validated foreign key before checking
+the data. These constraints have been tested locally, not deployed to Azure.
+For a disposable local PostgreSQL database initialized with the schema and
+seed, `psql -v ON_ERROR_STOP=1 -f tests\postgres_facilities_integrity.sql`
+tests that duplicate keys, cross-campus references, and deletion of referenced
+rooms are rejected. Never point this test at the Azure source or another shared
+database.
+These scripts have not been run against the Azure source or HorizonDB. The
+current HorizonDB onboarding procedure uses the portal. The signed-in
+workspace's New item catalog did not list HorizonDB; the cause is unconfirmed.
+A Fabric `PostgreSQLDatabase` REST list request succeeded with zero items, but neither
 creation eligibility nor the API's applicability to HorizonDB is confirmed.
 No HorizonDB creation request was submitted.
 
