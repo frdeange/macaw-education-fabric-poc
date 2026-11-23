@@ -194,9 +194,12 @@ sensitive characteristics from names or create real contact details.
 - Three schema-enabled Lakehouses, `MacawEducationBronze`,
   `MacawEducationSilver` and `MacawEducationGold`, have been created in the
   project workspace. Their SQL endpoints are ready and administrator queries
-  confirmed zero `dbo` tables. No data was materialized or permissions
-  explicitly granted. HorizonDB and Gold-backed models remain planned;
-  restricted-user access to the Lakehouses and their endpoints is unverified.
+  confirmed zero `dbo` tables. `Macaw Bronze to Silver` and
+  `Macaw Silver to Gold` notebook definitions were deployed and bound to the
+  Bronze and Silver Lakehouses. No Spark job was run and no data was
+  materialized; no permissions were explicitly granted. HorizonDB and
+  Gold-backed models remain planned; restricted-user access to the Lakehouses
+  and their endpoints is unverified.
 - Bronze contains 20 individual OneLake shortcuts to the operational SQL
   mirror under `Files/sql_mirror/`, as listed in
   `fabric/sql-bronze-tables.json`. The old `Analytics*` tables and
@@ -402,9 +405,12 @@ sensitive characteristics from names or create real contact details.
    the evaluator's threshold, trace inputs, temporal scope, and safety
    criteria. Register or verify any suite before claiming one exists. Run a
    batch evaluation only after the project owner approves it.
-7. Implement and validate the approved medallion data flow, Gold-backed
-   agent-ready models and delegated agent integration. Do not share a new
-   surface or report it as deployed until its corresponding tests pass.
+7. Execute and validate the deployed SQL-mirror notebook slice; integrate the
+   timetable and facilities sources after they are available; then add the
+   sequential pipeline, Gold-backed agent-ready models and delegated agent
+   integration. Notebook definitions are deployed, but no Spark run or
+   materialized Silver/Gold output is verified. Do not share a new surface or
+   report data products as deployed until their corresponding tests pass.
 
 ## Suggested Prep data for AI review
 

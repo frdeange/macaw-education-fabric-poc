@@ -114,6 +114,53 @@ batch lineage and freshness, make retries safe, surface failures, and prevent
 an incomplete batch from replacing a validated Gold release. Retain the
 current deployment as a rollback path until cutover is verified.
 
+### First SQL-mirror transformation slice
+
+The versioned notebook sources in [`notebooks/`](../notebooks/) define a
+first vertical slice for the current SQL-mirror snapshot only:
+
+- [`bronze_to_silver.py`](../notebooks/bronze_to_silver.py) reads the 20
+  allowlisted Delta shortcuts from Bronze `Files/sql_mirror/`. It checks the
+  reviewed per-table row-count and primary-key contracts, core foreign keys,
+  class sizes, school-unit/year-level consistency, VMBO/HAVO/VWO duration and
+  eligibility, observed instructional-day attendance, and assessment result
+  shape. It excludes attendance after the `2026-11-20` observation cutoff.
+- Silver writes conformed dimensions and enrollment, subject-enrollment,
+  student-day attendance, and assessment-result facts. Student and teacher
+  names are deliberately omitted; their source and mirror access remains
+  unverified.
+- [`silver_to_gold.py`](../notebooks/silver_to_gold.py) requires a validated
+  Silver batch and produces enrollment-by-year-level, class-section sizes,
+  subject enrollment, campus-day attendance, and assessment-outcome aggregates.
+  Class sizes are grouped by section, not track, because sections are shared
+  across applicable secondary tracks.
+
+Gold grains retain campus, education stage, academic year, year level, track,
+subject, department, date, and assessment period where relevant. Subject and
+department learner counts overlap and must not be added as if they were
+disjoint populations. Attendance remains student-day data; the only supported
+rate is `(Present + Late) / all observed attendance records`. Assessment
+averages use numeric marks only; qualitative primary outcomes are counted
+separately. No planned timetable, lesson attendance, or facilities data is
+included in this first slice.
+
+The notebooks write batch lineage and a one-row manifest. The Gold manifest's
+`Validated` status is a downstream processing gate, **not an access control**;
+the Lakehouse tables and their SQL endpoints remain unverified for restricted
+users and must not be shared. The current static row-count contract is tied to
+the reviewed snapshot and must be deliberately revised for a different source
+snapshot. The notebook definitions have not yet been executed against Fabric;
+there is no claim that Silver or Gold tables have been materialized.
+
+[`notebook_authoring.py`](../scripts/notebook_authoring.py) builds notebook
+definitions with discovered workspace and default-Lakehouse bindings.
+[`deploy-medallion-notebooks.ps1`](../scripts/deploy-medallion-notebooks.ps1)
+deployed both definitions successfully and does not run Spark or grant access.
+The definitions are persisted in the workspace; no notebook run has occurred,
+so no Silver or Gold table is materialized or validated in Fabric. This
+administrator deployment does not verify restricted-user access, notebook
+runtime behavior, mirror freshness, or cross-Lakehouse data permissions.
+
 ## Semantic models and agents
 
 Build two focused, Gold-backed star-schema semantic models, with Direct Lake

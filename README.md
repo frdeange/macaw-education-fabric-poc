@@ -47,8 +47,10 @@ Gold Lakehouses. Two Gold-backed semantic models will serve the Data Agents
 and Foundry. Fabric HorizonDB is the preferred PostgreSQL source; it is a
 public preview. The three Lakehouses have no materialized tables. Bronze now
 has 20 administrator-verified shortcuts to allowlisted SQL-mirror
-tables; physical ingestion and the rest of the target architecture are
-**not yet deployed**.
+tables. The repository now includes a SQL-mirror-only Bronze-to-Silver-to-Gold
+notebook slice. Both definitions are deployed with discovered Lakehouse
+bindings, but no Spark job has been run and no Silver or Gold tables have been
+materialized.
 See the [medallion design](./docs/medallion-architecture.md) for source,
 security and validation requirements.
 
@@ -88,7 +90,7 @@ counts across subjects or departments can overlap.
 | Semantic model | Direct Lake model deployed and checked against SQL using an administrator identity. Its row-level security is **not validated**. Name fields are intentionally not in the published model. |
 | Data Agents | Both agents are published but unshared. Administrator smoke tests returned 960 Dutch students per campus and 87,100 assessment results; individual-subject attendance was correctly declined. These tests do not establish general reliability or restricted-user isolation. |
 | Foundry | A prompt agent with two delegated Fabric IQ connections was deployed and smoke-tested as an administrator. Version 1 predates the subject-enrollment instruction update; restricted-user access is unverified. |
-| Medallion architecture | Three schema-enabled Lakehouses and their SQL endpoints are deployed. Bronze has 20 allowlisted SQL-mirror shortcuts, verified as an administrator; no tables have been materialized. PostgreSQL facilities and Gold-backed models are not yet deployed, and restricted access is unverified. |
+| Medallion architecture | Three schema-enabled Lakehouses and their SQL endpoints are deployed. Bronze has 20 allowlisted SQL-mirror shortcuts, verified as an administrator. Two SQL-mirror-only notebook definitions are deployed and bound to Bronze/Silver; Spark has not been run and no Silver/Gold tables are materialized. Timetable and facilities integration, Gold-backed models, and restricted-user access remain pending. |
 | GraphQL | Planned only; no API, generated schema, or security validation has been completed. |
 | Evaluation | Generated questions and a custom evaluator are unreviewed drafts. No batch evaluation or remote evaluation suite has been verified. |
 
@@ -112,8 +114,9 @@ bypass tests remain outstanding.
 | `sql/` | Operational schema, deterministic seed and names, analytical snapshots, migration, and validation queries. |
 | `semantic-model/` | Parameterized TMDL definition and proposed, unvalidated security role. |
 | `fabric/` | Data Agent and Foundry instructions, test questions, and the SQL Bronze table contract. |
-| `scripts/` | PowerShell deployment helpers and Python Foundry deployment, query, and evaluation helpers. |
-| `tests/` | Local tests for the Foundry helpers and Lakehouse provisioning. |
+| `notebooks/` | Cell-marked Python sources for the current Bronze-to-Silver-to-Gold SQL-mirror slice. |
+| `scripts/` | PowerShell deployment helpers and Python notebook-authoring and Foundry tooling. |
+| `tests/` | Local tests for notebook contracts, Foundry helpers, and Lakehouse provisioning. |
 | `docs/medallion-architecture.md` | Target data flow, agent-ready models and security gates. |
 | `AGENTS.md` | Project requirements, deployment status, security constraints, and pending acceptance gates. |
 | `settings.example.ps1` | Local configuration template; no credentials belong in this file. |
@@ -237,6 +240,17 @@ establish permissions for a future pipeline identity.
 .\scripts\deploy-sql-bronze-shortcuts.ps1 -SubscriptionId $SubscriptionId `
     -TenantId $TenantId -WorkspaceId $WorkspaceId -DatabaseItemId $DatabaseItemId -VerifyOnly
 .\tests\test_sql_bronze_shortcuts.ps1
+```
+
+`scripts/deploy-medallion-notebooks.ps1` deploys the two version-controlled
+notebook definitions, binding Bronze-to-Silver to the Bronze Lakehouse and
+Silver-to-Gold to Silver. It verifies the active-capacity workspace and only
+updates notebooks with the expected project descriptions. It does not execute
+Spark, materialize tables, or grant permissions.
+
+```powershell
+.\scripts\deploy-medallion-notebooks.ps1 -SubscriptionId $SubscriptionId `
+    -TenantId $TenantId -WorkspaceId $WorkspaceId
 ```
 
 `scripts/deploy-semantic-model.ps1` deploys the parameterized model to a
