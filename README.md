@@ -45,10 +45,15 @@ The approved design consolidates the existing SQL mirror, synthetic timetable
 files and a PostgreSQL facilities source through separate Bronze, Silver and
 Gold Lakehouses. Two Gold-backed semantic models will serve the Data Agents
 and Foundry. Fabric HorizonDB is the preferred PostgreSQL source; it is a
-public preview. The three Lakehouses have no materialized tables. Bronze now
-has 20 administrator-verified shortcuts to allowlisted SQL-mirror
-tables; physical ingestion and the rest of the target architecture are
-**not yet deployed**.
+public preview. Bronze has 20 administrator-verified shortcuts to
+allowlisted SQL-mirror tables. The SQL-mirror-only Bronze-to-Silver-to-Gold
+notebook slice and sequential `Macaw Education Medallion` pipeline are
+deployed. The first run exposed an attendance-count contract error: 315,842 is
+the Present-or-Late numerator, while 336,000 is the total observed
+instructional student-days. After correcting the contract, the pipeline
+completed. Silver and Gold products and validated manifests were read back
+through their SQL analytics endpoints. The pipeline has no schedule or
+external failure-notification connection.
 See the [medallion design](./docs/medallion-architecture.md) for source,
 security and validation requirements.
 
@@ -88,7 +93,7 @@ counts across subjects or departments can overlap.
 | Semantic model | Direct Lake model deployed and checked against SQL using an administrator identity. Its row-level security is **not validated**. Name fields are intentionally not in the published model. |
 | Data Agents | Both agents are published but unshared. Administrator smoke tests returned 960 Dutch students per campus and 87,100 assessment results; individual-subject attendance was correctly declined. These tests do not establish general reliability or restricted-user isolation. |
 | Foundry | A prompt agent with two delegated Fabric IQ connections was deployed and smoke-tested as an administrator. Version 1 predates the subject-enrollment instruction update; restricted-user access is unverified. |
-| Medallion architecture | Three schema-enabled Lakehouses and their SQL endpoints are deployed. Bronze has 20 allowlisted SQL-mirror shortcuts, verified as an administrator; no tables have been materialized. PostgreSQL facilities and Gold-backed models are not yet deployed, and restricted access is unverified. |
+| Medallion architecture | Three schema-enabled Lakehouses and their SQL endpoints are deployed. Bronze has 20 allowlisted SQL-mirror shortcuts, verified as an administrator. The SQL-mirror-only notebooks and sequential pipeline are deployed. After correcting the attendance row-count contract, a pipeline run completed; SQL endpoint readback confirmed Silver facts (5,600 enrollments, 43,550 subject enrollments, 336,000 attendance records, 87,100 assessment results) and Gold aggregate totals with validated manifests. Restricted-user access remains unverified. The pipeline has no schedule or external failure-notification connection. Timetable and facilities integration and Gold-backed agent models remain pending. |
 | GraphQL | Planned only; no API, generated schema, or security validation has been completed. |
 | Evaluation | Generated questions and a custom evaluator are unreviewed drafts. No batch evaluation or remote evaluation suite has been verified. |
 
@@ -111,9 +116,10 @@ bypass tests remain outstanding.
 | --- | --- |
 | `sql/` | Operational schema, deterministic seed and names, analytical snapshots, migration, and validation queries. |
 | `semantic-model/` | Parameterized TMDL definition and proposed, unvalidated security role. |
-| `fabric/` | Data Agent and Foundry instructions, test questions, and the SQL Bronze table contract. |
-| `scripts/` | PowerShell deployment helpers and Python Foundry deployment, query, and evaluation helpers. |
-| `tests/` | Local tests for the Foundry helpers and Lakehouse provisioning. |
+| `fabric/` | Data Agent and Foundry instructions, test questions, SQL Bronze table contract, and the Medallion pipeline definition. |
+| `notebooks/` | Cell-marked Python sources for the current Bronze-to-Silver-to-Gold SQL-mirror slice. |
+| `scripts/` | PowerShell deployment helpers and Python notebook-authoring and Foundry tooling. |
+| `tests/` | Local tests for notebook and pipeline contracts, Foundry helpers, and Lakehouse provisioning. |
 | `docs/medallion-architecture.md` | Target data flow, agent-ready models and security gates. |
 | `AGENTS.md` | Project requirements, deployment status, security constraints, and pending acceptance gates. |
 | `settings.example.ps1` | Local configuration template; no credentials belong in this file. |
@@ -237,6 +243,17 @@ establish permissions for a future pipeline identity.
 .\scripts\deploy-sql-bronze-shortcuts.ps1 -SubscriptionId $SubscriptionId `
     -TenantId $TenantId -WorkspaceId $WorkspaceId -DatabaseItemId $DatabaseItemId -VerifyOnly
 .\tests\test_sql_bronze_shortcuts.ps1
+```
+
+`scripts/deploy-medallion-notebooks.ps1` deploys the two version-controlled
+notebook definitions, binding Bronze-to-Silver to the Bronze Lakehouse and
+Silver-to-Gold to Silver. It verifies the active-capacity workspace and only
+updates notebooks with the expected project descriptions. It does not execute
+Spark, materialize tables, or grant permissions.
+
+```powershell
+.\scripts\deploy-medallion-notebooks.ps1 -SubscriptionId $SubscriptionId `
+    -TenantId $TenantId -WorkspaceId $WorkspaceId
 ```
 
 `scripts/deploy-semantic-model.ps1` deploys the parameterized model to a

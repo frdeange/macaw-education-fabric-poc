@@ -1,0 +1,100 @@
+{
+  "properties": {
+    "description": "Sequential SQL-mirror Silver and Gold transformations for the verified education snapshot.",
+    "parameters": {
+      "expected_snapshot_date": {
+        "type": "String",
+        "defaultValue": "2026-11-20"
+      },
+      "batch_id": {
+        "type": "String",
+        "defaultValue": "sql-mirror-2026-11-20-v1"
+      }
+    },
+    "activities": [
+      {
+        "name": "BronzeToSilver",
+        "type": "TridentNotebook",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 60
+        },
+        "typeProperties": {
+          "notebookId": "__BRONZE_TO_SILVER_NOTEBOOK_ID__",
+          "workspaceId": "__WORKSPACE_ID__",
+          "parameters": {
+            "expected_snapshot_date": {
+              "value": {
+                "value": "@pipeline().parameters.expected_snapshot_date",
+                "type": "Expression"
+              },
+              "type": "string"
+            },
+            "batch_id": {
+              "value": {
+                "value": "@pipeline().parameters.batch_id",
+                "type": "Expression"
+              },
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "SilverToGold",
+        "type": "TridentNotebook",
+        "dependsOn": [
+          {
+            "activity": "BronzeToSilver",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 60
+        },
+        "typeProperties": {
+          "notebookId": "__SILVER_TO_GOLD_NOTEBOOK_ID__",
+          "workspaceId": "__WORKSPACE_ID__"
+        }
+      },
+      {
+        "name": "FailAfterBronzeToSilver",
+        "type": "Fail",
+        "dependsOn": [
+          {
+            "activity": "BronzeToSilver",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "message": "Bronze-to-Silver failed. Inspect the notebook activity error before retrying.",
+          "errorCode": "MacawBronzeToSilverFailed"
+        }
+      },
+      {
+        "name": "FailAfterSilverToGold",
+        "type": "Fail",
+        "dependsOn": [
+          {
+            "activity": "SilverToGold",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "message": "Silver-to-Gold failed. Inspect the notebook activity error before retrying.",
+          "errorCode": "MacawSilverToGoldFailed"
+        }
+      }
+    ]
+  }
+}
