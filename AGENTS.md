@@ -246,10 +246,14 @@ sensitive characteristics from names or create real contact details.
 - Synthetic HorizonDB seed data and PostgreSQL DDL/validation scripts are
   versioned under `data/sources/horizondb/` and `postgres/`: 300 rooms and 10
   planned room closures. No HorizonDB item was created, the DDL/seed was not
-  executed, and no facilities mirror has been verified. In the signed-in
+  executed against HorizonDB or the Azure source, and no facilities mirror
+  has been verified. In the signed-in
   Fabric portal, the workspace's New item catalog did not offer HorizonDB,
   and no HorizonDB-specific tenant setting was visible. The reason is
   unconfirmed; preview eligibility and capacity/cost review remain open.
+  The local source schema enforces the campus-room relationship, and its
+  validator checks the primary keys and validated foreign key. These checks
+  passed locally but have not been deployed.
 - An Azure PostgreSQL Flexible Server fallback was provisioned while
   HorizonDB availability was still unconfirmed. It is now Ready in Sweden
   Central on the General Purpose D2ads v5 tier, with 32 GiB of storage,
@@ -266,8 +270,9 @@ sensitive characteristics from names or create real contact details.
   authentication for Script activity; the mirroring tutorial separately
   supports organizational accounts. The server has passwords disabled.
   Fabric managed private endpoints support PostgreSQL for Spark workloads,
-  but an Entra-authenticated seed route and managed-endpoint use for
-  mirroring remain unverified.
+  not a documented mirroring connection. The documented NotebookUtils token
+  audiences do not include PostgreSQL; an Entra-authenticated seed route
+  remains unverified.
 - The supported PostgreSQL `fabric-mirroring start` preparation command
   completed for the empty facilities database. Readback shows
   `azure.fabric_mirror_enabled=on` and `wal_level=logical`, with the server

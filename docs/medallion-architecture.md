@@ -63,7 +63,10 @@ readback showed mirroring enabled with `wal_level=logical`, but the reported
 extension allowlist and preload values do not show `azure_cdc`; its
 registration and readiness require verification. A VNet data gateway consumes
 4 CUs per active member and may contend with the shared F4 capacity; obtain
-approval before activating it.
+approval before activating it. A Fabric managed private endpoint supports Spark
+connectivity but is not documented as a mirroring gateway. The documented
+NotebookUtils token audiences do not include PostgreSQL, so a supported private
+Entra-authenticated seeding route is still unverified.
 
 No separate scheduling application or DUO dataset is required. All pupil,
 teacher, timetable and facilities data are synthetic. Government holiday dates

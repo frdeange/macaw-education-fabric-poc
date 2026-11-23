@@ -303,8 +303,11 @@ documents Basic authentication for Script activity, whereas the
 also supports an organizational account. Do not assume a Script activity can
 seed this Entra-only server. A
 [Fabric managed private endpoint](https://learn.microsoft.com/en-us/fabric/security/security-managed-private-endpoints-create)
-can connect Spark workloads to PostgreSQL, but Entra authentication for a
-seed notebook and its use for mirroring remain unverified.
+can connect Spark workloads to PostgreSQL, but does not establish a mirroring
+connection. The documented
+[NotebookUtils token audiences](https://learn.microsoft.com/en-us/fabric/data-engineering/notebookutils/notebookutils-credentials#get-token)
+do not include PostgreSQL. A supported private Entra-authenticated seed route
+remains unverified.
 
 Once a supported private Entra-authenticated loading path is available, apply
 the source schema and seed, then wait for the asynchronous mirror and validate
