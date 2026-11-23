@@ -295,6 +295,11 @@ not yet verified.
   managed private endpoints support PostgreSQL for Spark workloads, but a
   private Entra-authenticated seed route and managed-endpoint use for
   mirroring have not been verified. Do not treat these as interchangeable.
+- `scripts/load_postgres_facilities.py` is a local, tenant-checked Entra
+  loader with transactional creation and full snapshot comparison. It requires
+  preexisting private DNS/connectivity and TLS certificate verification; it
+  neither creates that route nor configures a mirror. Its use against the
+  Azure server remains unverified.
 
 The staged `SecurityAccessGrant` records are configuration, not enforcement.
 The existing Data Agents remain unshared; Foundry project access has not been

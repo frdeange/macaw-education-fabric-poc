@@ -299,8 +299,45 @@ can connect Spark workloads to PostgreSQL, but Entra authentication for a
 seed notebook and its use for mirroring remain unverified.
 
 Once a supported private Entra-authenticated loading path is available, apply
-schema, seed, then validation; wait for the asynchronous mirror and validate
+the source schema and seed, then wait for the asynchronous mirror and validate
 the analytics endpoint before adding facilities to Silver or Gold.
+
+The local `scripts/load_postgres_facilities.py` prepares and validates the
+same deterministic rooms and closures in one database transaction. It refuses
+to initialize if the `public` schema contains tables, views or sequences,
+compares every loaded row with the generator, and supports a read-only
+`--verify-only` recheck. It obtains an
+Entra token for the selected subscription and verifies its tenant, requires a
+trusted PostgreSQL CA bundle and `verify-full` TLS, and only connects when the
+canonical server hostname resolves exclusively to private RFC 1918 IPv4
+addresses. The loader does not establish private networking or configure
+mirroring. Transactional creation, rollback and read-only rechecking were
+validated locally with an embedded PostgreSQL engine; the loader has not been
+run against the Azure server.
+
+After an approved private route and DNS are configured, set the PostgreSQL
+settings locally and temporarily set `PGUSER` to the Entra database
+administrator; do not save the user name or a token in project files:
+
+```powershell
+. .\settings.local.ps1
+$env:PGUSER = '<postgresql-entra-admin-user>'
+python .\scripts\load_postgres_facilities.py `
+    --subscription-id $SubscriptionId --tenant-id $TenantId `
+    --server $PostgresServer --database-name $PostgresDatabase `
+    --ca-bundle $PostgresCaBundle
+Remove-Item Env:\PGUSER
+```
+
+Add `--verify-only` to recheck an existing snapshot without writes. The CA
+bundle must contain the trusted root certificates described in the
+[Azure PostgreSQL TLS guidance](https://learn.microsoft.com/en-us/azure/postgresql/security/security-tls-how-to-connect).
+This does not validate network, mirror, access restrictions, or other
+downstream paths. The loader does not grant replication permissions or Fabric
+access. The mirroring role must own both tables and have the database and
+`azure_cdc_admin` permissions described in the
+[PostgreSQL mirroring tutorial](https://learn.microsoft.com/en-us/fabric/mirroring/azure-database-postgresql-tutorial);
+review those grants separately before creating the mirror.
 
 ## Deploy and test
 
