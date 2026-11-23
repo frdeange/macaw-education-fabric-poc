@@ -8,8 +8,13 @@ available. Bronze contains 20 individual shortcuts to the SQL mirror, verified
 with the workspace administrator. The first SQL-mirror-only Silver/Gold
 pipeline run completed after an attendance-count contract correction; its
 products and validated manifests were read back through the SQL analytics
-endpoints. Physical ingestion of the additional sources, the HorizonDB source
-and Gold-backed models described here have not yet been deployed or validated.
+endpoints. Bronze now also contains the immutable raw timetable/holiday source
+batch `timetable-2026-2027-v2`; its three uploaded files were read back and
+matched their local SHA-256 digests. Cosmos incident documents, their mirror
+and the Bronze shortcut have also been verified. An interrupted enrichment
+run left partial Silver tables with a `Staging` manifest, not validated
+products; no enrichment Gold notebook ran. PostgreSQL facilities have not
+been seeded or mirrored, and Gold-backed models have not been deployed.
 Restricted-user access to the Lakehouses and their endpoints is unverified.
 
 ## Data flow
@@ -17,9 +22,9 @@ Restricted-user access to the Lakehouses and their endpoints is unverified.
 ```text
 Fabric SQL Database --> native OneLake mirror ------+
                                                    |
-Fabric HorizonDB ----> OneLake mirror -------------+--> Bronze --> Silver --> Gold
-  (Azure PostgreSQL fallback if unavailable)       |                      /       \
-                                                   |             Operations      Outcomes
+PostgreSQL facilities --> OneLake mirror (pending)-+--> Bronze --> Silver --> Gold
+  (HorizonDB preferred; Azure fallback in use)      |                      /       \
+Fabric Cosmos DB ----> OneLake mirror -------------+             Operations      Outcomes
 Synthetic timetable CSV + official holiday dates --+             model           model
                                                                       \           /
                                                                Two Fabric Data Agents
@@ -38,13 +43,36 @@ do not by themselves enforce a security boundary.
 | Source | Landing and purpose |
 | --- | --- |
 | Fabric SQL Database | Reuse its existing asynchronous OneLake mirror. Ingest allowlisted operational tables, including enrollment and subject enrollment, rather than querying the transactional endpoint or relying on the old analytical snapshots. |
-| Fabric HorizonDB | A managed PostgreSQL **public preview** item containing synthetic rooms, capacities and closures. For a database with Federated Analytics enabled, eligible tables mirror asynchronously to OneLake. Use Azure Database for PostgreSQL Flexible Server only if HorizonDB is unavailable and its fallback prerequisites are satisfied. |
-| Timetable CSV | Reproducibly generate fictional class, subject, teacher and room assignments. Deliver unchanged files to Bronze `Files/landing/timetable/<batch_id>/` and retain each original. |
-| Dutch holiday reference | Preserve a versioned extract of the official regional dates, provenance and advisory status. Compare it with the existing fictional school calendar; do not assume that advisory dates are mandatory for every school. |
+| Fabric HorizonDB | A managed PostgreSQL **public preview** item containing synthetic rooms, capacities and closures. The 300-room, 10-planned-closure schema and seed are prepared under `postgres/`, but HorizonDB has not been created or seeded. For a database with Federated Analytics enabled, eligible tables mirror asynchronously to OneLake. Use Azure Database for PostgreSQL Flexible Server only if HorizonDB is unavailable and its fallback prerequisites are satisfied. |
+| Fabric Cosmos DB | A synthetic incident container with 20 documents and 40 historical events. Every mirrored document was compared with the reproducible seed; a Bronze shortcut points to the mirror. Room identifiers do not establish that an incident caused a planned closure. |
+| Timetable CSV | `scripts/generate_timetable.py` reproducibly creates 2,485 fictional weekly class, subject, teacher and room assignments. The immutable `v2` timetable and manifest are landed at `Files/landing/timetable/timetable-2026-2027-v2/`. The source assignment reconstruction matched the live SQL analytics endpoint: 2,485 expected and actual assignments, zero mismatches across keys, sections, subjects, or teachers. The generated room codes still await validation against HorizonDB. |
+| Dutch holiday reference | The 21-row extract preserves the 18 regional 2026-2027 holiday ranges plus the three 2025-2026 summer ranges needed to validate the 2026 start of the snapshot. It includes official source URLs, school year, retrieval date, and advisory status. The SQL school calendar was not changed. |
+
+The approved Azure PostgreSQL fallback was provisioned before HorizonDB
+availability was confirmed. The server is now Ready in Sweden Central on
+General Purpose D2ads v5 with 32 GiB of storage, Entra-only authentication,
+and public network access disabled. It incurs compute and storage charges.
+The empty `macaw_facilities` database, a project-tenant Entra administrator
+and a system-assigned managed identity exist; no Fabric permissions were
+granted to the identity. Connectivity, schema, seed and mirror remain
+unverified. The supported `fabric-mirroring start` command completed and
+readback showed mirroring enabled with `wal_level=logical`, but the reported
+extension allowlist and preload values do not show `azure_cdc`; its
+registration and readiness require verification. A VNet data gateway consumes
+4 CUs per active member and may contend with the shared F4 capacity; obtain
+approval before activating it.
 
 No separate scheduling application or DUO dataset is required. All pupil,
 teacher, timetable and facilities data are synthetic. Government holiday dates
 are public reference information, not actual observations from a school.
+
+The source files and checksums are recorded in
+[`data/sources/timetable/manifest_2026_2027.json`](../data/sources/timetable/manifest_2026_2027.json).
+The uploader stores and verifies the raw timetable, holiday extract and
+manifest without overwriting existing batch paths. An earlier immutable `v1`
+upload with 18 holiday rows remains in Bronze; use only the `v2` paths.
+Facilities seed CSVs are not uploaded as an alternate source of truth: they
+are inputs for the pending HorizonDB seed.
 
 The SQL and HorizonDB mirrors are distinct from the Bronze Lakehouse. Verify
 that a OneLake shortcut is supported for each actual mirror and the pipeline
@@ -76,12 +104,29 @@ from future Bronze output; they apply only to the recorded synthetic snapshot.
 Initial-copy and per-table mirror monitoring, source changes and the actual
 pipeline identity still need validation before a batch is treated as current.
 
-For CSV deliveries, the first demo may upload files directly to the Lakehouse
-`Files` area. Subsequent deliveries use a repeatable, authenticated upload.
-Record the batch, source, timestamp and checksum; parse with an explicit
-schema and quarantine invalid rows. Replaying a batch must not duplicate
-records, and neither a malformed file nor an incomplete source snapshot may be
-published as a successful refresh.
+The raw `v2` files are already landed at their manifest paths, and a
+read-after-write check verified each SHA-256. Re-run
+[`deploy-timetable-sources.ps1`](../scripts/deploy-timetable-sources.ps1) with
+`-VerifyOnly` to check the immutable files without writing. Replaying the same
+content is a no-op; different content at an existing batch path is rejected.
+An enrichment run was started before the PostgreSQL prerequisite and then
+cancelled. Although the job reports `Completed`, direct Delta readback found
+only 2,485 timetable, 21 holiday and 20 incident rows, with the manifest still
+`Staging`; the incident-event table was absent. These partial Silver tables
+are not validated products and must not be consumed. No enrichment Gold
+notebook ran. The deployed draft notebooks now fail before writing until the
+PostgreSQL mirror is verified and integrated. The complete transform must
+validate mirrored foreign keys and compare the calendar without silently
+rewriting it.
+
+The live SQL calendar comparison found 20 dates that remain instructional
+during the optional May 1-9, 2027 holiday extension: four dates at each of the
+five campuses (May 3-5 and May 7; May 6 is an existing synthetic closure).
+All are advisory dates. The preceding 2025-2026 summer holidays end on August
+16 (North), August 30 (Central), and August 23 (South), matching the SQL
+calendar's August 17, August 31, and August 24 starts. Preserve the 20-day
+advisory variance as a documented school-calendar choice; do not change the
+synthetic SQL calendar without approval.
 
 ## Silver and Gold
 
@@ -155,7 +200,8 @@ disjoint populations. Attendance remains student-day data; the only supported
 rate is `(Present + Late) / all observed attendance records`. Assessment
 averages use numeric marks only; qualitative primary outcomes are counted
 separately. No planned timetable, lesson attendance, or facilities data is
-included in this first slice.
+included in this first validated slice. The incomplete enrichment staging
+tables are separate and must not be consumed as products.
 
 The notebooks write batch lineage and a one-row manifest. The Gold manifest's
 `Validated` status is a downstream processing gate, **not an access control**;
@@ -232,9 +278,12 @@ not yet verified.
   for, its analytical mirror.
 - Confirm preview eligibility, capacity, region, networking, costs, supported
   table types and mirror health. Do not change tenant settings or bypass policy.
-  The documented HorizonDB creation route is the portal; version schema and
-  synthetic seed scripts in Git, and document creator-only manual steps unless
-  a supported automation contract is verified.
+  The current HorizonDB onboarding procedure uses the portal. A separate
+  `PostgreSQLDatabase` REST reference exists, but its applicability to
+  HorizonDB is unconfirmed; a successful empty list response does not prove
+  creation eligibility. No HorizonDB creation request was submitted.
+  Version schema and synthetic seed scripts in Git, and document creator-only
+  manual steps unless a supported automation contract is verified.
 - If HorizonDB is unavailable, the approved Azure PostgreSQL fallback requires
   a compatible General Purpose or Memory Optimized tier, network and
   replication prerequisites; Burstable is not supported for mirroring.
@@ -254,5 +303,9 @@ and [issue #1](https://github.com/frdeange/macaw-education-fabric-poc/issues/1).
 - [HorizonDB mirroring](https://learn.microsoft.com/en-us/fabric/database/horizondb/mirroring-overview)
 - [HorizonDB preview limitations](https://learn.microsoft.com/en-us/fabric/database/horizondb/limitations)
 - [HorizonDB REST API guidance](https://learn.microsoft.com/en-us/fabric/database/horizondb/deploy-rest-api)
+- [Fabric PostgreSQL database REST API](https://learn.microsoft.com/en-us/rest/api/fabric/postgresqldatabase/items/create-postgre-sql-database)
 - [Lakehouse shortcuts and permissions](https://learn.microsoft.com/en-us/fabric/data-engineering/lakehouse-shortcuts)
 - [Dutch school holidays 2026-2027](https://www.rijksoverheid.nl/themas/onderwijs/schoolvakanties/overzicht-schoolvakanties-per-schooljaar/overzicht-schoolvakanties-2026-2027)
+- [Dutch school holidays 2025-2026](https://www.government.nl/themes/education/school-holidays/overview-of-school-holiday-dates-per-academic-year/school-holiday-dates-2025-2026)
+- [SQL assignment validation](../sql/validate-timetable-source.sql)
+- [School-calendar comparison](../sql/validate-calendar-reference.sql)

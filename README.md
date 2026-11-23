@@ -42,10 +42,10 @@ users in the same Microsoft Entra tenant, using delegated identities.
 ## Target medallion architecture
 
 The approved design consolidates the existing SQL mirror, synthetic timetable
-files and a PostgreSQL facilities source through separate Bronze, Silver and
-Gold Lakehouses. Two Gold-backed semantic models will serve the Data Agents
-and Foundry. Fabric HorizonDB is the preferred PostgreSQL source; it is a
-public preview. Bronze has 20 administrator-verified shortcuts to
+files, a PostgreSQL facilities source and synthetic Cosmos DB incidents through
+separate Bronze, Silver and Gold Lakehouses. Two Gold-backed semantic models
+will serve the Data Agents and Foundry. Fabric HorizonDB is the preferred
+PostgreSQL source; it is a public preview. Bronze has 20 administrator-verified shortcuts to
 allowlisted SQL-mirror tables. The SQL-mirror-only Bronze-to-Silver-to-Gold
 notebook slice and sequential `Macaw Education Medallion` pipeline are
 deployed. The first run exposed an attendance-count contract error: 315,842 is
@@ -53,7 +53,14 @@ the Present-or-Late numerator, while 336,000 is the total observed
 instructional student-days. After correcting the contract, the pipeline
 completed. Silver and Gold products and validated manifests were read back
 through their SQL analytics endpoints. The pipeline has no schedule or
-external failure-notification connection.
+external failure-notification connection. A reproducible timetable and
+regional holiday batch is landed in Bronze as immutable raw files. Cosmos
+contains 20 fictional incident documents and 40 history events; its mirror
+and Bronze shortcut were checked against the source. Azure PostgreSQL is
+running with an empty facilities database, but has no seeded tables or mirror.
+An interrupted enrichment run left partial Silver tables and a `Staging`
+manifest; those tables are not validated products. The draft enrichment
+notebooks are blocked until the PostgreSQL mirror is integrated.
 See the [medallion design](./docs/medallion-architecture.md) for source,
 security and validation requirements.
 
@@ -93,7 +100,9 @@ counts across subjects or departments can overlap.
 | Semantic model | Direct Lake model deployed and checked against SQL using an administrator identity. Its row-level security is **not validated**. Name fields are intentionally not in the published model. |
 | Data Agents | Both agents are published but unshared. Administrator smoke tests returned 960 Dutch students per campus and 87,100 assessment results; individual-subject attendance was correctly declined. These tests do not establish general reliability or restricted-user isolation. |
 | Foundry | A prompt agent with two delegated Fabric IQ connections was deployed and smoke-tested as an administrator. Version 1 predates the subject-enrollment instruction update; restricted-user access is unverified. |
-| Medallion architecture | Three schema-enabled Lakehouses and their SQL endpoints are deployed. Bronze has 20 allowlisted SQL-mirror shortcuts, verified as an administrator. The SQL-mirror-only notebooks and sequential pipeline are deployed. After correcting the attendance row-count contract, a pipeline run completed; SQL endpoint readback confirmed Silver facts (5,600 enrollments, 43,550 subject enrollments, 336,000 attendance records, 87,100 assessment results) and Gold aggregate totals with validated manifests. Restricted-user access remains unverified. The pipeline has no schedule or external failure-notification connection. Timetable and facilities integration and Gold-backed agent models remain pending. |
+| Medallion architecture | Three schema-enabled Lakehouses are deployed. The SQL-only pipeline and its Silver/Gold manifests were validated as an administrator. Bronze also contains immutable `timetable-2026-2027-v2` files and a checked Cosmos mirror shortcut. An interrupted enrichment run left 2,485 timetable, 21 holiday and 20 incident rows in partial Silver tables with a `Staging` manifest; the event table and enrichment Gold products are absent. Both deployed draft notebooks explicitly fail until the PostgreSQL mirror is integrated. These staging tables are not validated or safe to share. |
+| Cosmos DB incidents | The synthetic container holds 20 incidents and 40 history events. All documents were compared with the OneLake mirror, and the Bronze shortcut was verified. Restricted-user access remains unverified. |
+| PostgreSQL facilities | The approved fallback server is running with public network access and password authentication disabled. An empty `macaw_facilities` database, an Entra administrator and a system-assigned identity exist; the 300-room/10-closure seed, private connectivity and mirroring remain pending. The server incurs compute and storage costs. |
 | GraphQL | Planned only; no API, generated schema, or security validation has been completed. |
 | Evaluation | Generated questions and a custom evaluator are unreviewed drafts. No batch evaluation or remote evaluation suite has been verified. |
 
@@ -115,9 +124,11 @@ bypass tests remain outstanding.
 | Path | Purpose |
 | --- | --- |
 | `sql/` | Operational schema, deterministic seed and names, analytical snapshots, migration, and validation queries. |
+| `data/sources/` | Deterministic timetable, regional holiday, PostgreSQL facilities and Cosmos incident source files with checksums. |
+| `postgres/` | PostgreSQL facilities schema and post-seed validation scripts; not yet executed. |
 | `semantic-model/` | Parameterized TMDL definition and proposed, unvalidated security role. |
 | `fabric/` | Data Agent and Foundry instructions, test questions, SQL Bronze table contract, and the Medallion pipeline definition. |
-| `notebooks/` | Cell-marked Python sources for the current Bronze-to-Silver-to-Gold SQL-mirror slice. |
+| `notebooks/` | Cell-marked Python sources for the SQL-mirror slice and blocked enrichment drafts. |
 | `scripts/` | PowerShell deployment helpers and Python notebook-authoring and Foundry tooling. |
 | `tests/` | Local tests for notebook and pipeline contracts, Foundry helpers, and Lakehouse provisioning. |
 | `docs/medallion-architecture.md` | Target data flow, agent-ready models and security gates. |
@@ -210,6 +221,77 @@ migrated deployment.
 Verify that all required tables and columns have mirrored to OneLake and the
 SQL analytics endpoint before deploying or refreshing the semantic model.
 Mirroring is asynchronous; an endpoint metadata refresh may be required.
+
+## Generate and land timetable sources
+
+The generator rebuilds the fictional timetable, the holiday reference
+(including previous-school-year summer dates), the HorizonDB seed CSVs, and
+`postgres/horizondb_seed.sql` deterministically. Batch
+`timetable-2026-2027-v2` is the current immutable landing; the earlier `v1`
+files remain preserved and must not be used.
+
+Git and the generators preserve LF for CSV/JSONL files and CRLF for manifests
+and the PostgreSQL seed, matching the existing immutable landing bytes on
+every supported platform. A changed delivery requires a new batch rather than
+overwriting the landed files.
+
+```powershell
+py -3 .\scripts\generate_timetable.py
+.\scripts\deploy-timetable-sources.ps1 -SubscriptionId $SubscriptionId `
+    -TenantId $TenantId -WorkspaceId $WorkspaceId
+.\scripts\deploy-timetable-sources.ps1 -SubscriptionId $SubscriptionId `
+    -TenantId $TenantId -WorkspaceId $WorkspaceId -VerifyOnly
+.\tests\test_timetable_sources.ps1
+py -3 -m unittest discover -s .\tests -p 'test_timetable_source.py' -v
+```
+
+The uploader checks the active workspace capacity and Bronze item, verifies
+the selected subscription and token tenant, refuses to overwrite a path with
+different content, and reads back each uploaded file to verify its SHA-256.
+It uploads only the raw timetable, holiday extract and source manifest; it
+does not transform them, publish a schedule, or grant access. The current
+generator reconstructs assignment keys from the synthetic SQL seed; run
+`sql/validate-timetable-source.sql` against the source SQL analytics endpoint
+before adding a downstream transformation. The current snapshot matched all
+2,485 assignment keys and their class, subject and teacher references.
+`sql/validate-calendar-reference.sql` compares the regional dates with the
+synthetic SQL school calendar. It found 20 dates still marked instructional
+during the optional May 2027 holiday extension; that advisory variance is
+documented in the medallion design and was not used to rewrite the SQL calendar.
+
+## HorizonDB source status
+
+No HorizonDB item has been created. The source schema is
+[`postgres/horizondb_schema.sql`](./postgres/horizondb_schema.sql), the
+generated synthetic seed is `postgres/horizondb_seed.sql`, and post-load
+checks are in [`postgres/horizondb_validate.sql`](./postgres/horizondb_validate.sql).
+The seed contains 300 rooms and 10 future, explicitly planned room closures.
+These scripts have not been run against a live database. The current HorizonDB
+onboarding procedure uses the portal. The signed-in workspace's New item
+catalog did not list HorizonDB; the cause is unconfirmed. A Fabric
+`PostgreSQLDatabase` REST list request succeeded with zero items, but neither
+creation eligibility nor the API's applicability to HorizonDB is confirmed.
+No HorizonDB creation request was submitted.
+
+The approved Azure PostgreSQL fallback is running in Sweden Central on
+General Purpose D2ads v5 with 32 GiB of storage. Entra authentication is
+enabled, password authentication and public network access are disabled.
+The empty `macaw_facilities` database, a project-tenant Entra administrator and
+a system-assigned managed identity were created. No Fabric permissions were
+granted to that identity. The supported PostgreSQL mirroring preparation
+command completed; `azure.fabric_mirror_enabled` is `on` and `wal_level` is
+`logical`. The reported extension allowlist and preload values do not show
+`azure_cdc`, so its registration and readiness remain unverified. Private
+connectivity, schema, seed and the Fabric mirror remain pending. The running
+server incurs compute and storage costs. A VNet data
+gateway could use 4 capacity units per member while active, potentially
+competing with this shared F4 capacity; obtain approval before activating it.
+Do not create a new paid capacity or change shared workspace networking
+without the required approval.
+
+After creation, apply schema, seed, then validation; wait for its asynchronous
+mirror and validate the analytics endpoint before adding facilities to Silver
+or Gold.
 
 ## Deploy and test
 

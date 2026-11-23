@@ -1,0 +1,45 @@
+{
+  "academicYear": "2026-2027",
+  "assignmentSource": "Deterministic reconstruction of the reviewed synthetic SQL seed; validate foreign keys against the SQL mirror before publication.",
+  "batchId": "timetable-2026-2027-v2",
+  "files": {
+    "horizonClosures": {
+      "path": "horizondb/facility_closures_2026_2027.csv",
+      "rowCount": 10,
+      "sha256": "5273fa8db534b2c547d125a2051dc3ecfd666afca722ed3306487d10673e11d1"
+    },
+    "horizonRooms": {
+      "path": "horizondb/facility_rooms_2026_2027.csv",
+      "rowCount": 300,
+      "sha256": "aa4d432c50ff04c882eeafbd32b6cc10186b473df504598b5d2be3eddb40b9ed"
+    },
+    "regionalHolidays": {
+      "oneLakePath": "Files/landing/calendar/2026-2027/timetable-2026-2027-v2/dutch_school_holidays_2026_2027.csv",
+      "path": "calendar/dutch_school_holidays_2026_2027.csv",
+      "rowCount": 21,
+      "sha256": "b055c63a0d1ee282358a9e04a5f44b008346e70da51d2d568f544b1d8740cdd5"
+    },
+    "timetable": {
+      "oneLakePath": "Files/landing/timetable/timetable-2026-2027-v2/timetable_2026_2027.csv",
+      "path": "timetable/timetable_2026_2027.csv",
+      "rowCount": 2485,
+      "sha256": "c2bf2fb283b2e24b79c6fbe3c8bfc618efbc76213edbc8a16053619debcc6910"
+    }
+  },
+  "holidayReference": {
+    "advisoryDatesPreserved": true,
+    "retrievedDate": "2026-11-23",
+    "schoolCalendarIsNotRewritten": true,
+    "sourceUrls": [
+      "https://www.rijksoverheid.nl/themas/onderwijs/schoolvakanties/overzicht-schoolvakanties-per-schooljaar/overzicht-schoolvakanties-2026-2027",
+      "https://www.government.nl/themes/education/school-holidays/overview-of-school-holiday-dates-per-academic-year/school-holiday-dates-2025-2026"
+    ]
+  },
+  "observationDate": "2026-11-20",
+  "scheduleSemantics": "Planned weekly recurrence; it does not represent an observed lesson or attendance.",
+  "syntheticFacilities": {
+    "plannedRoomClosures": 10,
+    "rooms": 300,
+    "sourceVersion": "timetable-2026-2027-v2"
+  }
+}

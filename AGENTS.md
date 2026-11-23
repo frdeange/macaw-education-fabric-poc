@@ -120,14 +120,18 @@ sensitive characteristics from names or create real contact details.
   replication is asynchronous. Verify mirroring before downstream validation.
 - The target medallion design uses separate Bronze, Silver and Gold Lakehouses
   in one suitable development workspace. Ingest the SQL mirror, synthetic
-  timetable CSV files and a synthetic facilities source in Fabric HorizonDB
-  (public preview), with Azure PostgreSQL Flexible Server as the approved
-  fallback if HorizonDB is unavailable. Gold-backed models will serve the two
+  timetable CSV files, synthetic Cosmos DB incidents, and a synthetic
+  facilities source in Fabric HorizonDB (public preview), with Azure
+  PostgreSQL Flexible Server as the approved fallback if HorizonDB is
+  unavailable. Gold-backed models will serve the two
   Data Agents and Foundry. See `docs/medallion-architecture.md`. The three
   Lakehouses and SQL endpoints exist; Bronze has individual shortcuts to
   allowlisted SQL mirror tables. The corrected SQL-mirror-only pipeline has
-  materialized and validated Silver and Gold products; restricted-user access
-  remains unverified.
+  materialized and validated Silver and Gold products. Raw timetable and
+  holiday files and a verified Cosmos mirror shortcut are in Bronze.
+  Enrichment was interrupted; its partial Silver tables have a `Staging`
+  manifest and are not validated products. Restricted-user access remains
+  unverified.
 - Design the semantic model around clear facts, dimensions, relationships,
   measures, and documented denominators. Prefer the mirrored OneLake data and
   validate the supported storage mode and security behaviour in the target
@@ -208,10 +212,10 @@ sensitive characteristics from names or create real contact details.
   87,100, plus validated Silver and Gold manifests. Gold aggregate totals
   are 5,600 enrollment learners, 5,600 class-size learners, 43,550 subject
   enrollments, 336,000 attendance records and 87,100 assessment results.
-  The Present-or-Late numerator remains 315,842. No schedule, external
-  failure-notification connection or permissions were configured. HorizonDB
-  and Gold-backed models remain planned; restricted-user access to the
-  Lakehouses and their endpoints is unverified.
+  The Present-or-Late numerator remains 315,842. No pipeline schedule,
+  external failure-notification connection or permissions were configured.
+  HorizonDB and Gold-backed models remain planned; restricted-user access to
+  the Lakehouses and their endpoints is unverified.
 - Bronze contains 20 individual OneLake shortcuts to the operational SQL
   mirror under `Files/sql_mirror/`, as listed in
   `fabric/sql-bronze-tables.json`. The old `Analytics*` tables and
@@ -221,7 +225,66 @@ sensitive characteristics from names or create real contact details.
   counts for all 20 tables matched, the declared source primary keys matched,
   and the source change-feed states were `Active`.
   These checks do not prove row-level equality, a consistent cross-table
-  snapshot or mirror freshness. Physical Bronze ingestion is still pending.
+  snapshot or mirror freshness. The operational SQL mirror remains accessed
+  through shortcuts; no Bronze Delta materialization has run.
+- The reproducible synthetic timetable and holiday batch
+  `timetable-2026-2027-v2` is present in immutable Bronze landing paths. The
+  uploaded files contain 2,485 planned weekly assignments, 21 official
+  regional holiday rows, and a source manifest; remote SHA-256 readback passed.
+  An earlier immutable `v1` batch with 18 holiday rows remains in Bronze and
+  is superseded; use only the `v2` paths. A read-only SQL analytics endpoint
+  comparison reconstructed 2,485 source teaching assignments with zero
+  mismatched keys, sections, subjects, or teachers. An enrichment run was
+  started before the documented PostgreSQL prerequisite, then cancellation
+  was requested. Its partial Silver timetable and holiday tables must not be
+  used as validated outputs.
+- The holiday reference includes 2025-2026 summer dates to check the start of
+  the 2026-2027 snapshot. A SQL analytics endpoint comparison found 20 dates
+  marked instructional during the optional 2027 May holiday extension (four
+  dates at each of five campuses); the dates are advisory. The SQL school
+  calendar was not changed.
+- Synthetic HorizonDB seed data and PostgreSQL DDL/validation scripts are
+  versioned under `data/sources/horizondb/` and `postgres/`: 300 rooms and 10
+  planned room closures. No HorizonDB item was created, the DDL/seed was not
+  executed, and no facilities mirror has been verified. In the signed-in
+  Fabric portal, the workspace's New item catalog did not offer HorizonDB,
+  and no HorizonDB-specific tenant setting was visible. The reason is
+  unconfirmed; preview eligibility and capacity/cost review remain open.
+- An Azure PostgreSQL Flexible Server fallback was provisioned while
+  HorizonDB availability was still unconfirmed. It is now Ready in Sweden
+  Central on the General Purpose D2ads v5 tier, with 32 GiB of storage,
+  Microsoft Entra authentication enabled, password authentication disabled,
+  and public network access disabled. It incurs compute and storage charges.
+  The empty `macaw_facilities` database, an Entra administrator in the
+  project tenant and a system-assigned managed identity exist; no Fabric
+  permissions were granted to that identity. The schema and seed have not
+  been applied and no facilities mirror has been deployed. Connectivity and
+  security remain unverified. A VNet data gateway uses 4 CUs per active member
+  and may contend with the shared F4 capacity; obtain approval before
+  activating it or changing shared workspace networking.
+- The supported PostgreSQL `fabric-mirroring start` preparation command
+  completed for the empty facilities database. Readback shows
+  `azure.fabric_mirror_enabled=on` and `wal_level=logical`, with the server
+  Ready and public access disabled. The reported `azure.extensions` and
+  `shared_preload_libraries` values do not show `azure_cdc`; its registration
+  and readiness have not been verified from the database. This preparation
+  is not a deployed Fabric mirror or proof that replication works.
+- The synthetic Cosmos DB container contains 20 incidents and 40 history
+  events. The 20 mirrored documents were compared in full with their seed,
+  and the Bronze shortcut to the Cosmos mirror was verified. Events are
+  observed only through the snapshot date. Shared room identifiers do not
+  prove that an incident caused a planned PostgreSQL closure.
+- The enrichment notebook job was cancelled after it had started, but Fabric
+  reported `Completed`; a direct Delta readback found a `Staging` manifest,
+  2,485 timetable rows, 21 holiday rows and 20 incident rows. The event table
+  was absent. No enrichment Gold notebook was run. Both enrichment notebook
+  definitions now raise an explicit error before writing until the verified
+  PostgreSQL mirror has been integrated. Do not consume the partial tables or
+  interpret the job's completion status as validation.
+- A documented Fabric REST API for `PostgreSQLDatabase` exists and lists zero
+  items in the workspace, but its applicability to HorizonDB has not been
+  confirmed. A successful list call does not prove that creation is enabled.
+  No HorizonDB creation request was submitted.
 - The Fabric SQL database `MacawEducation` was created in the project
   workspace.
 - The database is reachable with SQLCMD using a SQL token acquired for the
@@ -419,12 +482,13 @@ sensitive characteristics from names or create real contact details.
    criteria. Register or verify any suite before claiming one exists. Run a
    batch evaluation only after the project owner approves it.
 7. Preserve the verified SQL-mirror notebook slice and pipeline run; configure
-   an approved external failure notification if required; integrate timetable
-   and facilities sources when available; then add Gold-backed agent-ready
-   models and delegated agent integration. Silver and Gold counts and
-   manifests are validated as an administrator, but restricted-user access
-   remains unverified. Do not share a new surface until its security tests
-   pass.
+   an approved external failure notification if required; validate the landed
+   timetable and holiday files against the mirror, then transform them only
+   after the PostgreSQL rooms and closures are seeded and mirrored. Add
+   Gold-backed agent-ready models and delegated agent integration afterward.
+   Silver and Gold counts and manifests are validated as an administrator,
+   but restricted-user access remains unverified. Do not share a new surface
+   until its security tests pass.
 
 ## Suggested Prep data for AI review
 

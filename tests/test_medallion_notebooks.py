@@ -67,6 +67,8 @@ class MedallionNotebookTests(unittest.TestCase):
         cases = [
             ("bronze_to_silver.py", "MacawEducationBronze"),
             ("silver_to_gold.py", "MacawEducationSilver"),
+            ("bronze_enrichment_to_silver.py", "MacawEducationBronze"),
+            ("silver_enrichment_to_gold.py", "MacawEducationSilver"),
         ]
         for filename, lakehouse_name in cases:
             with self.subTest(notebook=filename):
@@ -105,6 +107,23 @@ class MedallionNotebookTests(unittest.TestCase):
         self.assertIn('F.col("CalendarDate") <= snapshot_date', silver)
         self.assertIn('F.col("IsInstructionDay")', silver)
         self.assertIn('manifest["RunStatus"] == "Validated"', gold)
+
+    def test_enrichment_preserves_plan_observation_and_pending_postgres_boundaries(self):
+        silver = (ROOT / "notebooks" / "bronze_enrichment_to_silver.py").read_text(encoding="utf-8")
+        gold = (ROOT / "notebooks" / "silver_enrichment_to_gold.py").read_text(encoding="utf-8")
+        self.assertIn('F.from_json("events", event_schema)', silver)
+        self.assertIn('F.col("occurred_on") > F.lit(expected_snapshot_date)', silver)
+        self.assertIn('source["PostgreSQLStatus"] == "Pending"', gold)
+        self.assertIn('"planned_weekly_assignment_count"', gold)
+        self.assertNotIn("FirstName", silver + gold)
+        self.assertNotIn("LastName", silver + gold)
+
+    def test_enrichment_drafts_fail_closed_until_postgres_is_integrated(self):
+        for name in ("bronze_enrichment_to_silver.py", "silver_enrichment_to_gold.py"):
+            with self.subTest(name=name):
+                source = (ROOT / "notebooks" / name).read_text(encoding="utf-8")
+                with self.assertRaisesRegex(RuntimeError, "PostgreSQL rooms and closures mirror"):
+                    exec(compile(source, name, "exec"), {})
 
 
 if __name__ == "__main__":

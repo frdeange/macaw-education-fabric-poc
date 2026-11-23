@@ -155,7 +155,7 @@ try {
         throw "Pipeline item was not uniquely verified after it was $operation."
     }
     Write-Host "Pipeline definition ${operation}: $PipelineName."
-    Write-Host 'The pipeline was not run; no Spark jobs or Silver/Gold tables were produced.'
+    Write-Host 'Definition deployment does not run the pipeline; verify job history and output tables separately.'
 } finally {
     $headers.Clear()
 }

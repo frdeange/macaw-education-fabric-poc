@@ -1,0 +1,4 @@
+/data/sources/**/*.csv text eol=lf
+/data/sources/**/*.jsonl text eol=lf
+/data/sources/**/manifest_*.json text eol=crlf
+/postgres/horizondb_seed.sql text eol=crlf
