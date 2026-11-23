@@ -306,7 +306,10 @@ The local `scripts/load_postgres_facilities.py` prepares and validates the
 same deterministic rooms and closures in one database transaction. It refuses
 to initialize if the `public` schema contains tables, views or sequences,
 compares every loaded row with the generator, and supports a read-only
-`--verify-only` recheck. It obtains an
+`--verify-only` recheck. Before connecting, it checks that the local timetable,
+holiday, room, closure, incident, manifest and SQL-seed files match their
+deterministic generators. This checks local files only, not current remote
+mirror freshness. It obtains an
 Entra token for the selected subscription and verifies its tenant, requires a
 trusted PostgreSQL CA bundle and `verify-full` TLS, and only connects when the
 canonical server hostname resolves exclusively to private RFC 1918 IPv4

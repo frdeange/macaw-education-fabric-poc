@@ -7,12 +7,14 @@ import ipaddress
 import os
 import re
 import socket
+import tempfile
 from datetime import date
 from pathlib import Path
 
 import psycopg
 
 from azure_auth import TenantCheckedCredential, guid
+from generate_facility_incidents import read_dataset as read_incident_dataset
 from generate_timetable import (
     CLOSURE_FIELDS,
     ROOM_FIELDS,
@@ -20,6 +22,7 @@ from generate_timetable import (
     build_closures,
     build_rooms,
     build_timetable,
+    generate_dataset,
 )
 
 
@@ -70,6 +73,24 @@ def expected_records() -> tuple[list[tuple[object, ...]], list[tuple[object, ...
             )
         )
     return rooms, closures
+
+
+def verify_local_sources() -> None:
+    source_root = ROOT / "data" / "sources"
+    with tempfile.TemporaryDirectory() as temporary_directory:
+        generated_root = Path(temporary_directory) / "data" / "sources"
+        manifest = generate_dataset(generated_root)
+        paths = [Path(details["path"]) for details in manifest["files"].values()]
+        paths.append(Path("timetable") / "manifest_2026_2027.json")
+        for path in paths:
+            if (generated_root / path).read_bytes() != (source_root / path).read_bytes():
+                raise ValueError(f"The local source {path} differs from the deterministic snapshot.")
+        if (
+            (generated_root.parent.parent / "postgres" / "horizondb_seed.sql").read_bytes()
+            != (ROOT / "postgres" / "horizondb_seed.sql").read_bytes()
+        ):
+            raise ValueError("The local PostgreSQL seed differs from the deterministic snapshot.")
+    read_incident_dataset(source_root / "cosmos")
 
 
 def load_or_verify(connection: psycopg.Connection, *, verify_only: bool) -> None:
@@ -138,6 +159,7 @@ def main() -> None:
     if not args.ca_bundle.is_file():
         parser.error("The PostgreSQL trusted root CA bundle must be an existing PEM file.")
 
+    verify_local_sources()
     address = private_address(args.server)
     credential = TenantCheckedCredential(args.subscription_id, args.tenant_id)
     try:
