@@ -3,8 +3,10 @@
 This is the target architecture for [issue #7](https://github.com/frdeange/macaw-education-fabric-poc/issues/7).
 The existing SQL database, its OneLake mirror, the initial semantic model,
 the unshared Data Agents and the Foundry agent remain the current deployment.
-The Lakehouses, HorizonDB source and Gold-backed models described here have
-not yet been deployed or validated.
+The three schema-enabled Lakehouses are deployed but empty; their SQL endpoints
+accepted administrator queries. Ingestion, the HorizonDB source and the
+Gold-backed models described here have not yet been deployed or validated.
+Restricted-user access to the Lakehouses and their endpoints is unverified.
 
 ## Data flow
 
