@@ -41,14 +41,14 @@ users in the same Microsoft Entra tenant, using delegated identities.
 
 ## Target medallion architecture
 
-The approved design consolidates the existing SQL mirror, synthetic timetable
+The target design consolidates the existing SQL mirror, synthetic timetable
 files and a PostgreSQL facilities source through separate Bronze, Silver and
 Gold Lakehouses. Two Gold-backed semantic models will serve the Data Agents
 and Foundry. Fabric HorizonDB is the preferred PostgreSQL source; it is a
 public preview. The three Lakehouses have no materialized tables. Bronze now
-has 20 administrator-verified shortcuts to allowlisted SQL-mirror
-tables; physical ingestion and the rest of the target architecture are
-**not yet deployed**.
+has 20 administrator-verified shortcuts to allowlisted SQL-mirror tables.
+These shortcuts use the existing mirror rather than creating another Bronze
+copy. The remaining target architecture is **not yet validated**.
 See the [medallion design](./docs/medallion-architecture.md) for source,
 security and validation requirements.
 
@@ -88,7 +88,7 @@ counts across subjects or departments can overlap.
 | Semantic model | Direct Lake model deployed and checked against SQL using an administrator identity. Its row-level security is **not validated**. Name fields are intentionally not in the published model. |
 | Data Agents | Both agents are published but unshared. Administrator smoke tests returned 960 Dutch students per campus and 87,100 assessment results; individual-subject attendance was correctly declined. These tests do not establish general reliability or restricted-user isolation. |
 | Foundry | A prompt agent with two delegated Fabric IQ connections was deployed and smoke-tested as an administrator. Version 1 predates the subject-enrollment instruction update; restricted-user access is unverified. |
-| Medallion architecture | Three schema-enabled Lakehouses and their SQL endpoints are deployed. Bronze has 20 allowlisted SQL-mirror shortcuts, verified as an administrator; no tables have been materialized. PostgreSQL facilities and Gold-backed models are not yet deployed, and restricted access is unverified. |
+| Medallion architecture | Three schema-enabled Lakehouses and their SQL endpoints are deployed. Bronze has 20 administrator-verified SQL-mirror shortcuts, not another copy; no Lakehouse tables have been materialized. PostgreSQL facilities and Gold-backed models are not yet deployed, and restricted access is unverified. |
 | GraphQL | Planned only; no API, generated schema, or security validation has been completed. |
 | Evaluation | Generated questions and a custom evaluator are unreviewed drafts. No batch evaluation or remote evaluation suite has been verified. |
 
