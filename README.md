@@ -353,6 +353,16 @@ access. The mirroring role must own both tables and have the database and
 [PostgreSQL mirroring tutorial](https://learn.microsoft.com/en-us/fabric/mirroring/azure-database-postgresql-tutorial);
 review those grants separately before creating the mirror.
 
+After loading the source, run the same command with `--verify-only` and
+`--check-mirroring-readiness` while authenticated as the intended mirroring
+role. In a read-only transaction, this checks `wal_level`, the mirroring flag,
+`azure_cdc` registration, effective `azure_cdc_admin` and database `CREATE`
+permissions, and the extension's eligibility status for both facilities
+tables. Missing or non-`OK` status fails explicitly. This check is prepared
+and tested locally but has not run on the Azure source. It does not configure
+permissions, verify the server's managed identity, gateway or replication
+capacity, establish mirror freshness, or prove downstream access isolation.
+
 ## Deploy and test
 
 `scripts/deploy-lakehouses.ps1` creates the three schema-enabled Lakehouses on

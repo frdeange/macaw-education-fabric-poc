@@ -280,6 +280,13 @@ sensitive characteristics from names or create real contact details.
   `shared_preload_libraries` values do not show `azure_cdc`; its registration
   and readiness have not been verified from the database. This preparation
   is not a deployed Fabric mirror or proof that replication works.
+- The PostgreSQL loader has an optional, read-only source readiness check for
+  CDC registration, effective role permissions and table eligibility. Its
+  logic and queries passed local tests, but it has not connected to Azure and
+  does not verify the gateway, mirroring, freshness or downstream isolation.
+  The mirrored school calendar marks both planned closure dates instructional
+  for all five campuses; the 17 local schedule overlaps remain plans, not
+  observed events or validated Gold results.
 - The synthetic Cosmos DB container contains 20 incidents and 40 history
   events. The 20 mirrored documents were compared in full with their seed,
   and the Bronze shortcut to the Cosmos mirror was verified. Events are

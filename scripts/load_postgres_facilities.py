@@ -31,6 +31,32 @@ POSTGRES_SCOPE = "https://ossrdbms-aad.database.windows.net/.default"
 PRIVATE_NETWORKS = tuple(
     ipaddress.ip_network(network) for network in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
 )
+MIRROR_PREREQUISITES_SQL = """
+SELECT
+    current_setting('wal_level'),
+    current_setting('azure.fabric_mirror_enabled', true),
+    EXISTS (SELECT 1 FROM pg_catalog.pg_extension WHERE extname = 'azure_cdc'),
+    CASE
+        WHEN EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'azure_cdc_admin')
+        THEN pg_has_role(current_user, 'azure_cdc_admin', 'USAGE')
+        ELSE false
+    END,
+    has_database_privilege(current_user, current_database(), 'CREATE'),
+    to_regprocedure('azure_cdc.get_all_tables_mirror_status()') IS NOT NULL,
+    CASE
+        WHEN to_regprocedure('azure_cdc.get_all_tables_mirror_status()') IS NOT NULL
+        THEN has_function_privilege(
+            current_user, 'azure_cdc.get_all_tables_mirror_status()', 'EXECUTE'
+        )
+        ELSE false
+    END
+"""
+MIRROR_TABLE_STATUS_SQL = """
+SELECT table_name, mirroring_status
+FROM azure_cdc.get_all_tables_mirror_status()
+WHERE table_schema = 'public'
+  AND table_name IN ('facility_room', 'facility_closure')
+"""
 
 
 def azure_postgres_host(value: str) -> str:
@@ -143,6 +169,42 @@ def load_or_verify(connection: psycopg.Connection, *, verify_only: bool) -> None
             raise ValueError("The PostgreSQL facilities do not match the generated synthetic snapshot.")
 
 
+def check_mirroring_readiness(connection: psycopg.Connection) -> None:
+    with connection.transaction():
+        connection.execute("SET TRANSACTION READ ONLY")
+        prerequisites = connection.execute(MIRROR_PREREQUISITES_SQL).fetchone()
+        if prerequisites is None:
+            raise RuntimeError("PostgreSQL returned no mirroring prerequisite information.")
+        wal_level, enabled, cdc_installed, cdc_admin, database_create, status_exists, status_execute = (
+            prerequisites
+        )
+        failures = []
+        if wal_level != "logical":
+            failures.append("wal_level is not logical")
+        if enabled != "on":
+            failures.append("azure.fabric_mirror_enabled is not on or cannot be read")
+        if not cdc_installed:
+            failures.append("azure_cdc is not registered in the current database")
+        if not cdc_admin:
+            failures.append("the connected role cannot use azure_cdc_admin")
+        if not database_create:
+            failures.append("the connected role lacks CREATE on the database")
+        if not status_exists:
+            failures.append("the azure_cdc table eligibility function is unavailable")
+        elif not status_execute:
+            failures.append("the connected role cannot EXECUTE the azure_cdc table eligibility function")
+        if failures:
+            raise RuntimeError("PostgreSQL mirroring checks failed: " + "; ".join(failures) + ".")
+
+        statuses = connection.execute(MIRROR_TABLE_STATUS_SQL).fetchall()
+        for table in ("facility_room", "facility_closure"):
+            matches = [status for name, status in statuses if name == table]
+            if len(matches) != 1:
+                raise RuntimeError(f"Expected exactly one CDC eligibility result for {table}.")
+            if matches[0] != "OK":
+                raise RuntimeError(f"CDC eligibility for {table} is {matches[0]!r}, not 'OK'.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--subscription-id", required=True, type=guid)
@@ -151,8 +213,11 @@ def main() -> None:
     parser.add_argument("--database-name", required=True, type=postgres_database_name)
     parser.add_argument("--ca-bundle", required=True, type=Path)
     parser.add_argument("--verify-only", action="store_true")
+    parser.add_argument("--check-mirroring-readiness", action="store_true")
     args = parser.parse_args()
 
+    if args.check_mirroring_readiness and not args.verify_only:
+        parser.error("--check-mirroring-readiness requires --verify-only.")
     user = os.environ.get("PGUSER", "").strip()
     if not user:
         parser.error("Set PGUSER temporarily to the PostgreSQL Entra administrator's user name.")
@@ -178,9 +243,13 @@ def main() -> None:
             application_name="macaw-facilities-seed",
         ) as connection:
             load_or_verify(connection, verify_only=args.verify_only)
+            if args.check_mirroring_readiness:
+                check_mirroring_readiness(connection)
     finally:
         credential.close()
     print("Verified 300 synthetic rooms and 10 planned closures in PostgreSQL.")
+    if args.check_mirroring_readiness:
+        print("Checked source-side CDC, database permissions and table eligibility for the connected role.")
     print("Mirroring and consumer security require separate configuration and verification.")
 
 

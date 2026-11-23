@@ -5,7 +5,7 @@ import socket
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 from scripts.load_postgres_facilities import (
     azure_postgres_host,
+    check_mirroring_readiness,
     expected_records,
     load_or_verify,
     main,
@@ -89,6 +90,59 @@ class PostgresFacilitiesTests(unittest.TestCase):
         transaction = connection.transaction.return_value
         self.assertIs(transaction.__exit__.call_args.args[0], ValueError)
 
+    def test_mirroring_readiness_checks_both_tables_in_a_read_only_transaction(self):
+        connection = MagicMock()
+        connection.execute.return_value.fetchone.return_value = (
+            "logical", "on", True, True, True, True, True
+        )
+        connection.execute.return_value.fetchall.return_value = [
+            ("facility_room", "OK"), ("facility_closure", "OK")
+        ]
+        check_mirroring_readiness(connection)
+        self.assertEqual(connection.execute.call_args_list[0].args[0], "SET TRANSACTION READ ONLY")
+        self.assertEqual(connection.execute.call_count, 3)
+
+    def test_mirroring_readiness_rejects_missing_prerequisites(self):
+        valid = ("logical", "on", True, True, True, True, True)
+        cases = (
+            (0, "replica", "wal_level"),
+            (1, None, "azure.fabric_mirror_enabled"),
+            (2, False, "azure_cdc is not registered"),
+            (3, False, "azure_cdc_admin"),
+            (4, False, "lacks CREATE"),
+            (5, False, "eligibility function is unavailable"),
+            (6, False, "cannot EXECUTE"),
+        )
+        for index, value, message in cases:
+            with self.subTest(message=message):
+                connection = MagicMock()
+                values = list(valid)
+                values[index] = value
+                connection.execute.return_value.fetchone.return_value = tuple(values)
+                with self.assertRaisesRegex(RuntimeError, message):
+                    check_mirroring_readiness(connection)
+                self.assertEqual(connection.execute.call_count, 2)
+
+    def test_mirroring_readiness_rejects_missing_duplicate_or_unhealthy_table_status(self):
+        cases = (
+            ([("facility_room", "OK")], "exactly one CDC eligibility result"),
+            (
+                [("facility_room", "OK"), ("facility_room", "OK"), ("facility_closure", "OK")],
+                "exactly one CDC eligibility result",
+            ),
+            ([("facility_room", "WARNING"), ("facility_closure", "OK")], "WARNING"),
+            ([("facility_room", "OK"), ("facility_closure", "ERROR")], "ERROR"),
+        )
+        for statuses, message in cases:
+            with self.subTest(statuses=statuses):
+                connection = MagicMock()
+                connection.execute.return_value.fetchone.return_value = (
+                    "logical", "on", True, True, True, True, True
+                )
+                connection.execute.return_value.fetchall.return_value = statuses
+                with self.assertRaisesRegex(RuntimeError, message):
+                    check_mirroring_readiness(connection)
+
     def test_inconsistent_local_sources_are_rejected(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -132,6 +186,7 @@ class PostgresFacilitiesTests(unittest.TestCase):
                 patch(f"{module}.TenantCheckedCredential") as credential_type,
                 patch(f"{module}.psycopg.connect") as connect,
                 patch(f"{module}.load_or_verify") as load,
+                patch(f"{module}.check_mirroring_readiness") as check_readiness,
                 redirect_stdout(StringIO()),
             ):
                 credential = credential_type.return_value
@@ -150,7 +205,11 @@ class PostgresFacilitiesTests(unittest.TestCase):
                 self.assertEqual(connect.call_args.kwargs["sslmode"], "verify-full")
                 self.assertEqual(connect.call_args.kwargs["sslrootcert"], str(bundle.resolve()))
                 load.assert_called_once_with(connect.return_value.__enter__.return_value, verify_only=True)
+                check_readiness.assert_not_called()
                 credential.close.assert_called_once_with()
+                arguments.append("--check-mirroring-readiness")
+                main()
+                check_readiness.assert_called_once_with(connect.return_value.__enter__.return_value)
                 resolve.reset_mock()
                 credential_type.reset_mock()
                 verify_sources.side_effect = ValueError("Local sources do not match.")
@@ -158,6 +217,28 @@ class PostgresFacilitiesTests(unittest.TestCase):
                     main()
                 resolve.assert_not_called()
                 credential_type.assert_not_called()
+
+    def test_mirroring_check_requires_read_only_verification(self):
+        arguments = [
+            "loader",
+            "--subscription-id", "11111111-1111-1111-1111-111111111111",
+            "--tenant-id", "22222222-2222-2222-2222-222222222222",
+            "--server", "example.postgres.database.azure.com",
+            "--database-name", "macaw_facilities",
+            "--ca-bundle", "roots.pem",
+            "--check-mirroring-readiness",
+        ]
+        error_output = StringIO()
+        with (
+            patch.object(sys, "argv", arguments),
+            patch("scripts.load_postgres_facilities.verify_local_sources") as verify_sources,
+            redirect_stderr(error_output),
+            self.assertRaises(SystemExit) as error,
+        ):
+            main()
+        self.assertEqual(error.exception.code, 2)
+        self.assertIn("requires --verify-only", error_output.getvalue())
+        verify_sources.assert_not_called()
 
 
 if __name__ == "__main__":
