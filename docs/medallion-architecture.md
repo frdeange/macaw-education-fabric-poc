@@ -68,6 +68,13 @@ connectivity but is not documented as a mirroring gateway. The documented
 NotebookUtils token audiences do not include PostgreSQL, so a supported private
 Entra-authenticated seeding route is still unverified.
 
+The current identity can see one VNet outside the project resource group,
+with no Power Platform-delegated subnet; its ownership and suitability are
+unverified. It can see no private endpoint targeting this PostgreSQL server,
+and local DNS returned no RFC 1918 IPv4 address. These point-in-time checks
+are permission-limited and do not establish that other paths do not exist.
+Do not modify the existing VNet without approval.
+
 The source loader now includes the extension's pre-creation
 `azure_cdc.check_prerequisites()` check in addition to the role and table
 checks. The PostgreSQL shortcut path is prepared locally with an explicit

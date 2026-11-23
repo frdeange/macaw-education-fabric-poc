@@ -297,6 +297,13 @@ competing with this shared F4 capacity; obtain approval before activating it.
 Do not create a new paid capacity or change shared workspace networking
 without the required approval.
 
+A read-only inventory visible to the current identity found one VNet outside
+the project resource group, with no Power Platform-delegated subnet. Its
+ownership and suitability are unverified; do not modify it without approval.
+No accessible private endpoint targeted the PostgreSQL server, and local DNS
+returned no RFC 1918 IPv4 address for it, so the loader cannot currently
+connect from this machine. These are permission-limited, point-in-time checks.
+
 The [Fabric pipeline PostgreSQL connector](https://learn.microsoft.com/en-us/fabric/data-factory/connector-azure-database-for-postgresql-overview)
 documents Basic authentication for Script activity, whereas the
 [mirroring tutorial](https://learn.microsoft.com/en-us/fabric/mirroring/azure-database-postgresql-tutorial)

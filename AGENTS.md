@@ -266,6 +266,12 @@ sensitive characteristics from names or create real contact details.
   security remain unverified. A VNet data gateway uses 4 CUs per active member
   and may contend with the shared F4 capacity; obtain approval before
   activating it or changing shared workspace networking.
+- A read-only subscription inventory visible to the current identity found
+  one VNet outside the project resource group and no subnet delegated to Power
+  Platform in that VNet; its ownership and suitability are unverified. No
+  accessible private endpoint targeted the PostgreSQL server, and local DNS
+  returned no RFC 1918 IPv4 address. These checks are permission-limited and
+  point-in-time; do not modify the existing VNet without approval.
 - The Fabric Azure PostgreSQL pipeline connector documents Basic
   authentication for Script activity; the mirroring tutorial separately
   supports organizational accounts. The server has passwords disabled.
