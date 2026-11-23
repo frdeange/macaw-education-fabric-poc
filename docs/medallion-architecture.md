@@ -6,8 +6,9 @@ the unshared Data Agents and the Foundry agent remain the current deployment.
 The three schema-enabled Lakehouses are deployed without materialized tables;
 their SQL endpoints accepted administrator queries. Bronze contains 20
 individual shortcuts to the SQL mirror, verified with the workspace
-administrator. Physical ingestion, the HorizonDB source and the Gold-backed
-models described here have not yet been deployed or validated. Restricted-user
+administrator. The shortcuts use the existing replicated data without an
+additional Bronze copy. The HorizonDB source, Silver and Gold transformations,
+and Gold-backed models have not yet been deployed or validated. Restricted-user
 access to the Lakehouses and their endpoints is unverified.
 
 ## Data flow
@@ -35,7 +36,7 @@ do not by themselves enforce a security boundary.
 
 | Source | Landing and purpose |
 | --- | --- |
-| Fabric SQL Database | Reuse its existing asynchronous OneLake mirror. Ingest allowlisted operational tables, including enrollment and subject enrollment, rather than querying the transactional endpoint or relying on the old analytical snapshots. |
+| Fabric SQL Database | Read the existing asynchronous OneLake mirror through Bronze shortcuts to allowlisted operational tables, including enrollment and subject enrollment. Do not query the transactional endpoint or rely on the old analytical snapshots. |
 | Fabric HorizonDB | A managed PostgreSQL **public preview** item containing synthetic rooms, capacities and closures. For a database with Federated Analytics enabled, eligible tables mirror asynchronously to OneLake. Use Azure Database for PostgreSQL Flexible Server only if HorizonDB is unavailable and its fallback prerequisites are satisfied. |
 | Timetable CSV | Reproducibly generate fictional class, subject, teacher and room assignments. Deliver unchanged files to Bronze `Files/landing/timetable/<batch_id>/` and retain each original. |
 | Dutch holiday reference | Preserve a versioned extract of the official regional dates, provenance and advisory status. Compare it with the existing fictional school calendar; do not assume that advisory dates are mandatory for every school. |
@@ -44,13 +45,16 @@ No separate scheduling application or DUO dataset is required. All pupil,
 teacher, timetable and facilities data are synthetic. Government holiday dates
 are public reference information, not actual observations from a school.
 
-The SQL and HorizonDB mirrors are distinct from the Bronze Lakehouse. Verify
-that a OneLake shortcut is supported for each actual mirror and the pipeline
-identity before using it. Materialize selected data into Bronze Delta tables;
-if a shortcut is unsupported, evaluate a documented route from the mirrored
+The SQL and HorizonDB mirrors are distinct from the Bronze Lakehouse. Bronze
+shortcuts point to the existing SQL mirror; they do not create or retain a
+second copy. Apply transformations when building Silver and Gold. For
+HorizonDB, verify whether a shortcut to its actual mirror is supported for the
+execution identity; if not, evaluate a documented route from the mirrored
 analytical copy rather than silently reading the operational database. Monitor
-each table's initial copy, later changes and reseeds. A mirror is a current
-replica, not an immutable change history or a freshness guarantee.
+each table's initial replication, later changes and reseeds. A mirror is an
+asynchronous current replica, not an immutable change history or a freshness
+guarantee. Independent historical snapshots would be a separate design choice,
+not a prerequisite for using the mirror as Bronze.
 
 The SQL mirror's 20 operational tables are enumerated, with their source keys,
 in [`sql-bronze-tables.json`](../fabric/sql-bronze-tables.json). Individual
@@ -61,6 +65,13 @@ directories, and does not overwrite existing paths. These checks do not prove
 that a separately configured pipeline identity can use the shortcuts, nor
 that the mirror is complete or current. No access grants were made.
 
+Because these shortcuts are under `Files/`, they are not automatically
+registered as Bronze SQL endpoint tables. A Spark transformation can read the
+Delta paths directly, subject to its effective permissions. Do not write or
+delete through the shortcuts: operations inside a shortcut can modify its
+target when the caller has sufficient access. Internal shortcut authorization
+and identity delegation vary by consuming engine and must be tested separately.
+
 An administrator compared counts for all 20 operational source tables with
 the SQL analytics endpoint; they matched, including 5,600 students, 240
 teachers, 280 sections, 336,000 student-day records, 87,100 assessment results
@@ -70,9 +81,12 @@ source primary keys. These are point-in-time checks, not a cross-table
 transaction, proof of row-by-row equality, or a freshness SLA.
 The independently captured counts are retained in
 [`sql-bronze-baseline.json`](../fabric/sql-bronze-baseline.json), separate
-from future Bronze output; they apply only to the recorded synthetic snapshot.
+from future transformed output; they apply only to the recorded synthetic
+snapshot.
 Initial-copy and per-table mirror monitoring, source changes and the actual
-pipeline identity still need validation before a batch is treated as current.
+pipeline identity still need validation before downstream data is treated as
+current. Silver processing must account for source deletions, retries and
+incomplete mirror states; a shortcut itself is not a batch or a security control.
 
 For CSV deliveries, the first demo may upload files directly to the Lakehouse
 `Files` area. Subsequent deliveries use a repeatable, authenticated upload.
@@ -184,4 +198,5 @@ and [issue #1](https://github.com/frdeange/macaw-education-fabric-poc/issues/1).
 - [HorizonDB preview limitations](https://learn.microsoft.com/en-us/fabric/database/horizondb/limitations)
 - [HorizonDB REST API guidance](https://learn.microsoft.com/en-us/fabric/database/horizondb/deploy-rest-api)
 - [Lakehouse shortcuts and permissions](https://learn.microsoft.com/en-us/fabric/data-engineering/lakehouse-shortcuts)
+- [OneLake shortcut behavior and security](https://learn.microsoft.com/en-us/fabric/onelake/onelake-shortcuts)
 - [Dutch school holidays 2026-2027](https://www.rijksoverheid.nl/themas/onderwijs/schoolvakanties/overzicht-schoolvakanties-per-schooljaar/overzicht-schoolvakanties-2026-2027)

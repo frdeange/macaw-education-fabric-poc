@@ -119,13 +119,14 @@ sensitive characteristics from names or create real contact details.
   mirrored to OneLake and made available through a SQL analytics endpoint;
   replication is asynchronous. Verify mirroring before downstream validation.
 - The target medallion design uses separate Bronze, Silver and Gold Lakehouses
-  in one suitable development workspace. Ingest the SQL mirror, synthetic
-  timetable CSV files and a synthetic facilities source in Fabric HorizonDB
-  (public preview), with Azure PostgreSQL Flexible Server as the approved
-  fallback if HorizonDB is unavailable. Gold-backed models will serve the two
-  Data Agents and Foundry. See `docs/medallion-architecture.md`. The three
-  Lakehouses and SQL endpoints exist; Bronze also has individual shortcuts to
-  allowlisted SQL mirror tables, but no materialized data.
+  in one suitable development workspace. Use the existing SQL mirror directly
+  through Bronze shortcuts rather than creating a second Bronze copy. Include
+  synthetic timetable CSV files and a synthetic facilities source in Fabric
+  HorizonDB (public preview), with Azure PostgreSQL Flexible Server as the
+  approved fallback if HorizonDB is unavailable. Gold-backed models will serve
+  the two Data Agents and Foundry. See `docs/medallion-architecture.md`. The
+  three Lakehouses and SQL endpoints exist; no Lakehouse tables have been
+  materialized.
 - Design the semantic model around clear facts, dimensions, relationships,
   measures, and documented denominators. Prefer the mirrored OneLake data and
   validate the supported storage mode and security behaviour in the target
@@ -206,7 +207,10 @@ sensitive characteristics from names or create real contact details.
   counts for all 20 tables matched, the declared source primary keys matched,
   and the source change-feed states were `Active`.
   These checks do not prove row-level equality, a consistent cross-table
-  snapshot or mirror freshness. Physical Bronze ingestion is still pending.
+  snapshot or mirror freshness. The shortcuts expose the existing mirrored
+  files; no second Bronze copy is needed. Their `Files/` placement does not
+  automatically register SQL endpoint tables. Do not write or delete through
+  the shortcuts: those operations can affect their targets.
 - The Fabric SQL database `MacawEducation` was created in the project
   workspace.
 - The database is reachable with SQLCMD using a SQL token acquired for the
