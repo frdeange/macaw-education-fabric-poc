@@ -262,6 +262,12 @@ sensitive characteristics from names or create real contact details.
   security remain unverified. A VNet data gateway uses 4 CUs per active member
   and may contend with the shared F4 capacity; obtain approval before
   activating it or changing shared workspace networking.
+- The Fabric Azure PostgreSQL pipeline connector documents Basic
+  authentication for Script activity; the mirroring tutorial separately
+  supports organizational accounts. The server has passwords disabled.
+  Fabric managed private endpoints support PostgreSQL for Spark workloads,
+  but an Entra-authenticated seed route and managed-endpoint use for
+  mirroring remain unverified.
 - The supported PostgreSQL `fabric-mirroring start` preparation command
   completed for the empty facilities database. Readback shows
   `azure.fabric_mirror_enabled=on` and `wal_level=logical`, with the server

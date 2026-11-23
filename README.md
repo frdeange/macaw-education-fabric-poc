@@ -289,9 +289,18 @@ competing with this shared F4 capacity; obtain approval before activating it.
 Do not create a new paid capacity or change shared workspace networking
 without the required approval.
 
-After creation, apply schema, seed, then validation; wait for its asynchronous
-mirror and validate the analytics endpoint before adding facilities to Silver
-or Gold.
+The [Fabric pipeline PostgreSQL connector](https://learn.microsoft.com/en-us/fabric/data-factory/connector-azure-database-for-postgresql-overview)
+documents Basic authentication for Script activity, whereas the
+[mirroring tutorial](https://learn.microsoft.com/en-us/fabric/mirroring/azure-database-postgresql-tutorial)
+also supports an organizational account. Do not assume a Script activity can
+seed this Entra-only server. A
+[Fabric managed private endpoint](https://learn.microsoft.com/en-us/fabric/security/security-managed-private-endpoints-create)
+can connect Spark workloads to PostgreSQL, but Entra authentication for a
+seed notebook and its use for mirroring remain unverified.
+
+Once a supported private Entra-authenticated loading path is available, apply
+schema, seed, then validation; wait for the asynchronous mirror and validate
+the analytics endpoint before adding facilities to Silver or Gold.
 
 ## Deploy and test
 

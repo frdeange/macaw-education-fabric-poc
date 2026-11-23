@@ -287,6 +287,14 @@ not yet verified.
 - If HorizonDB is unavailable, the approved Azure PostgreSQL fallback requires
   a compatible General Purpose or Memory Optimized tier, network and
   replication prerequisites; Burstable is not supported for mirroring.
+- The [Azure PostgreSQL pipeline connector](https://learn.microsoft.com/en-us/fabric/data-factory/connector-azure-database-for-postgresql-overview)
+  documents Basic authentication for Script activity; the private-only
+  fallback has password authentication disabled. The
+  [mirroring tutorial](https://learn.microsoft.com/en-us/fabric/mirroring/azure-database-postgresql-tutorial)
+  separately documents an organizational account and a VNet gateway. Fabric
+  managed private endpoints support PostgreSQL for Spark workloads, but a
+  private Entra-authenticated seed route and managed-endpoint use for
+  mirroring have not been verified. Do not treat these as interchangeable.
 
 The staged `SecurityAccessGrant` records are configuration, not enforcement.
 The existing Data Agents remain unshared; Foundry project access has not been
