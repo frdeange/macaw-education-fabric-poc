@@ -18,6 +18,7 @@ param(
     [string]$GoldEnrichmentNotebookName = 'Macaw Silver Enrichment to Gold',
     [string]$SkillAttribution = 'e2e-medallion-architecture',
     [switch]$OnlyEnrichment,
+    [switch]$OnlyGold,
     [switch]$VerifyOnly
 )
 
@@ -76,6 +77,13 @@ $notebookSpecs = if ($OnlyEnrichment) { @(
         LakehouseName = $SilverName
     }
 ) }
+if ($OnlyGold) {
+    $targetName = if ($OnlyEnrichment) { $GoldEnrichmentNotebookName } else { $SilverToGoldNotebookName }
+    $notebookSpecs = @($notebookSpecs | Where-Object { $_.DisplayName -ceq $targetName })
+    if ($notebookSpecs.Count -ne 1) {
+        throw 'The requested Gold notebook was not uniquely selected.'
+    }
+}
 
 try {
     $workspaces = @(Get-FabricItems -Uri "$api/workspaces" -Headers $headers |

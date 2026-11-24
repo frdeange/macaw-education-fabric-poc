@@ -35,8 +35,11 @@ Fabric SQL Database -- asynchronous mirroring --> OneLake
                                                 Fabric IQ
 ```
 
-The published Data Agent MCP endpoints provide conversational access. The
-proposed GraphQL API is **not deployed**. The intended external consumers are
+The Gold Data Agents are published but unshared. MCP smoke tests exposed an
+operations-agent attendance error and an incorrect refusal; agent reliability
+is not established. The earlier Data Agents were deleted by the owner; the
+existing Foundry version still references them. The proposed GraphQL API is **not
+deployed**. The intended external consumers are
 users in the same Microsoft Entra tenant, using delegated identities.
 
 ## Target medallion architecture
@@ -44,7 +47,7 @@ users in the same Microsoft Entra tenant, using delegated identities.
 The approved design consolidates the existing SQL mirror, synthetic timetable
 files, a PostgreSQL facilities source and synthetic Cosmos DB incidents through
 separate Bronze, Silver and Gold Lakehouses. Two Gold-backed semantic models
-will serve the Data Agents and Foundry. Fabric HorizonDB is the preferred
+now use detailed products; agent acceptance remains pending. Fabric HorizonDB is the preferred
 PostgreSQL source; it is a public preview. The owner created Bronze schema
 shortcuts `sql`, `CosmosDB` and `PostGre` to the three mirrors; the raw CSV
 files remain in `Files`. OneLake's table catalog lists 27, 1 and 2 tables in
@@ -110,16 +113,16 @@ counts across subjects or departments can overlap.
 | Fabric SQL Database | Deployed and validated: 5,600 students, 240 teachers, 280 sections, 336,000 attendance records, and 87,100 assessment results. |
 | Synthetic names | Populated and validated in SQL. Student, teacher, and analytical learner counts and keyed name digests match the SQL analytics endpoint, including Unicode. |
 | Mirroring and analytics | Operational and analytical tables are mirrored. The 43,550 subject-enrollment rows and the other analytical tables are point-in-time snapshots, not automatically refreshed from later operational changes. |
-| Semantic model | Direct Lake model deployed and checked against SQL using an administrator identity. Its row-level security is **not validated**. Name fields are intentionally not in the published model. |
-| Data Agents | Both agents are published but unshared. Administrator smoke tests returned 960 Dutch students per campus and 87,100 assessment results; individual-subject attendance was correctly declined. These tests do not establish general reliability or restricted-user isolation. |
-| Foundry | A prompt agent with two delegated Fabric IQ connections was deployed and smoke-tested as an administrator. Version 1 predates the subject-enrollment instruction update; restricted-user access is unverified. |
+| Semantic model | Two Gold Direct Lake models use detailed facts and passed selected administrator DAX checks; RLS is **not validated**. Names are excluded. |
+| Data Agents | Two Gold-backed agents are published but unshared. MCP tests found an attendance error and an incorrect refusal; reliability is not established. The owner deleted the earlier SQL-backed agents. |
+| Foundry | The existing prompt agent's version 1 references the deleted agents; its new Gold integration is not configured or tested. Restricted-user access is unverified. |
 | Medallion architecture | Three schema-enabled Lakehouses and the owner-created SQL, Cosmos and PostgreSQL Bronze schema shortcuts exist. The four-stage SQL and enrichment pipeline completed, and Silver and Gold manifests and totals were validated after the run. Restricted-user security is unverified. |
 | Cosmos DB incidents | The synthetic container holds 20 incidents and 40 history events. All documents were compared with the OneLake mirror; an administrator Spark read through the Bronze schema shortcut returned 20 incidents. Restricted-user access remains unverified. |
 | PostgreSQL facilities | The fallback server contains 300 synthetic rooms and 10 planned closures. Its Fabric mirror reports both tables replicating, and its SQL endpoint rows match the validated seed. Administrator Spark reads through the Bronze schema shortcut returned 300 and 10 rows. Public access is enabled with an Azure-services firewall rule, Entra authentication and passwords disabled. Persistent table selection and restricted-user security remain unverified. The server incurs compute and storage costs. |
 | GraphQL | Planned only; no API, generated schema, or security validation has been completed. |
 | Evaluation | Generated questions and a custom evaluator are unreviewed drafts. No batch evaluation or remote evaluation suite has been verified. |
 
-The School Operations agent uses a Microsoft **preview** runtime for this PoC,
+The earlier School Operations agent used a Microsoft **preview** runtime for this PoC,
 as accepted by the project owner. Preview features can change and are not
 generally available. Validate capacity, tenant settings, permissions, regional
 processing boundaries, networking, and costs in the target environment.

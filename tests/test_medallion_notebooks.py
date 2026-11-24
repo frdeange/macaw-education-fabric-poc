@@ -154,6 +154,33 @@ class MedallionNotebookTests(unittest.TestCase):
             ("observed_attendance_records", observed_source_rows),
         )
 
+    def test_gold_student_department_bridge_deduplicates_subjects_not_departments(self):
+        source = ROOT / "notebooks" / "silver_to_gold.py"
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        bridge = next(
+            node for node in tree.body
+            if isinstance(node, ast.Assign)
+            and any(isinstance(target, ast.Name) and target.id == "gold_student_departments"
+                    for target in node.targets)
+        )
+
+        class Rows:
+            def __init__(self, rows):
+                self.rows = rows
+
+            def select(self, *columns):
+                return Rows([tuple(row[column] for column in columns) for row in self.rows])
+
+            def distinct(self):
+                return set(self.rows)
+
+        common = {"campus_key": 1, "academic_year_key": 1, "enrollment_key": 1, "student_key": 1}
+        rows = [dict(common, department_key=1), dict(common, department_key=1),
+                dict(common, department_key=2)]
+        namespace = {"subject_enrollment": Rows(rows)}
+        exec(compile(ast.Module(body=[bridge], type_ignores=[]), str(source), "exec"), namespace)
+        self.assertEqual(namespace["gold_student_departments"], {(1, 1, 1, 1, 1), (1, 1, 1, 1, 2)})
+
     def test_built_notebooks_have_fabric_binding_and_valid_code_cells(self):
         parameters = {
             "bronze_lakehouse_name": "MacawEducationBronze",

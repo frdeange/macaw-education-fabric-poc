@@ -49,6 +49,7 @@ silver_table_names = [
     "dim_subject",
     "dim_date",
     "dim_class_section",
+    "dim_student",
     "fact_enrollment",
     "fact_subject_enrollment",
     "fact_attendance",
@@ -150,6 +151,38 @@ gold_assessment_results = (
     )
 )
 
+gold_student_departments = subject_enrollment.select(
+    "campus_key", "academic_year_key", "enrollment_key", "student_key", "department_key",
+).distinct()
+
+detail_outputs = {
+    "gold_enrollment_detail": enrollment,
+    "gold_subject_enrollment_detail": subject_enrollment,
+    "gold_student_department": gold_student_departments,
+    "gold_attendance_detail": attendance,
+    "gold_assessment_result_detail": assessment_result,
+}
+detail_expected_counts = {
+    "gold_enrollment_detail": 5600,
+    "gold_subject_enrollment_detail": 43550,
+    "gold_student_department": 31450,
+    "gold_attendance_detail": 336000,
+    "gold_assessment_result_detail": 87100,
+}
+for table_name, expected_count in detail_expected_counts.items():
+    actual_count = detail_outputs[table_name].count()
+    require(actual_count == expected_count,
+            f"{table_name} count {actual_count} does not match {expected_count}.")
+
+for name, frame, keys in [
+    ("enrollment", enrollment, ["enrollment_key"]),
+    ("subject enrollment", subject_enrollment, ["enrollment_key", "subject_key"]),
+    ("attendance", attendance, ["enrollment_key", "date_key"]),
+    ("assessment results", assessment_result, ["assessment_key", "enrollment_key"]),
+]:
+    require(frame.select(*keys).distinct().count() == frame.count(),
+            f"Gold {name} has duplicate business-grain keys.")
+
 gold_outputs = {
     "gold_enrollment_by_year_level": gold_enrollment_by_year_level,
     "gold_class_section_sizes": gold_class_section_sizes,
@@ -173,6 +206,7 @@ for table_name, (measure, expected_total) in expected_totals.items():
         f"{table_name}.{measure} total {actual_total} does not match {expected_total}.",
     )
     actual_totals[table_name] = int(actual_total)
+actual_totals.update(detail_expected_counts)
 
 section_size_stats = gold_class_section_sizes.agg(
     F.count("*").alias("SectionCount"),
@@ -208,6 +242,7 @@ for table_name in [
     "dim_subject",
     "dim_date",
     "dim_class_section",
+    "dim_student",
 ]:
     (
         silver_tables[table_name].write.format("delta")
@@ -216,7 +251,7 @@ for table_name in [
         .saveAsTable(f"{gold_lakehouse_name}.dbo.{table_name}")
     )
 
-for table_name, frame in gold_outputs.items():
+for table_name, frame in {**gold_outputs, **detail_outputs}.items():
     (
         frame.withColumn("_batch_id", F.lit(batch_id))
         .withColumn("_source_snapshot_date", F.to_date(F.lit(source_snapshot_date)))

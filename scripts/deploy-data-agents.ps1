@@ -12,7 +12,9 @@ param(
     [Parameter(Mandatory)]
     [guid]$SemanticModelId,
 
-    [switch]$UpdateExisting
+    [switch]$UpdateExisting,
+
+    [string]$ConfigPath = (Join-Path $PSScriptRoot '..\fabric\data-agents.json')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,7 +22,7 @@ Set-StrictMode -Version Latest
 
 . (Join-Path $PSScriptRoot 'fabric-api.ps1')
 $headers = Get-FabricHeaders -SubscriptionId $SubscriptionId -TenantId $TenantId
-$config = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\fabric\data-agents.json') -Raw | ConvertFrom-Json
+$config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 $base = "https://api.fabric.microsoft.com/v1/workspaces/$WorkspaceId"
 
 $models = @(Get-FabricItems -Uri "$base/semanticModels" -Headers $headers)
@@ -125,6 +127,34 @@ foreach ($agent in $config.agents) {
         }
     }
 
+    if ($agent.PSObject.Properties.Name -contains 'elementDescriptions') {
+        foreach ($entry in $agent.elementDescriptions) {
+            $table = @($elements | Where-Object { $_.type -eq 'Table' -and $_.displayName -ceq $entry.table })
+            if ($table.Count -ne 1 -or $entry.table -notin $agent.tables -or -not $entry.description) {
+                throw "Invalid description target for '$($agent.name)': $($entry.table)."
+            }
+            $target = $table
+            if ($entry.PSObject.Properties.Name -contains 'element') {
+                $rootId = [Uri]::EscapeDataString($table[0].id)
+                $children = @(Get-FabricItems -Uri "$elementsUri`?rootId=$rootId" -Headers $headers)
+                $target = @($children | Where-Object { $_.displayName -ceq $entry.element })
+            }
+            if ($target.Count -ne 1 -or $target[0].state -ne 'Available') {
+                throw "Description target is not uniquely available for '$($agent.name)'."
+            }
+            if ($target[0].PSObject.Properties.Name -notcontains 'description' -or
+                $target[0].description -cne $entry.description) {
+                $elementId = [Uri]::EscapeDataString($target[0].id)
+                $descriptionBody = @{ description = $entry.description } | ConvertTo-Json -Compress
+                $updated = Invoke-RestMethod -Method Patch -Uri "$elementsUri`?id=$elementId" `
+                    -Headers $headers -ContentType 'application/json' -Body $descriptionBody
+                if ($updated.description -cne $entry.description) {
+                    throw "Description update failed for '$($agent.name)'."
+                }
+            }
+        }
+    }
+
     $publishBody = @{ publishedDescription = $agent.description } | ConvertTo-Json -Compress
     $published = Invoke-RestMethod -Method Post -Uri "$agentBase/staging/publish" `
         -Headers $headers -ContentType 'application/json' -Body $publishBody
@@ -148,6 +178,17 @@ foreach ($agent in $config.agents) {
         $children = @(Get-FabricItems -Uri "$agentBase/datasources/$($publishedSources[0].id)/elements?rootId=$elementId" -Headers $headers)
         if ($children.Count -eq 0 -or @($children | Where-Object { -not $_.isSelected }).Count -ne 0) {
             throw "Published elements are not fully selected for table '$($table.displayName)' in '$($agent.name)'."
+        }
+        if ($agent.PSObject.Properties.Name -contains 'elementDescriptions') {
+            foreach ($entry in @($agent.elementDescriptions | Where-Object { $_.table -ceq $table.displayName })) {
+                $target = @($table)
+                if ($entry.PSObject.Properties.Name -contains 'element') {
+                    $target = @($children | Where-Object { $_.displayName -ceq $entry.element })
+                }
+                if ($target.Count -ne 1 -or $target[0].description -cne $entry.description) {
+                    throw "Published description does not match for '$($agent.name)'."
+                }
+            }
         }
     }
     Write-Host "Published $($agent.name); access has not been shared."

@@ -104,6 +104,40 @@ outputs = {
     "gold_facility_incidents_by_campus": gold_incidents,
     "gold_planned_closure_impacts": gold_closure_impacts,
 }
+detail_outputs = {
+    "gold_room": tables["facility_room"].select(
+        "room_key", "campus_key", "room_code", "room_type", "capacity",
+    ),
+    "gold_planned_assignment": schedule.select(
+        "schedule_id", "teaching_assignment_key", "campus_key", "class_section_key",
+        "subject_key", "department_key", "teacher_key", "room_key", "education_stage",
+        "day_of_week", "period_number", "start_time", "end_time",
+        "effective_start_date", "effective_end_date", "planned_subject_student_count",
+        "capacity", "is_capacity_exceeded",
+    ),
+    "gold_facility_incident": incidents.select(
+        "incident_id", "campus_key", "room_code", "category", "incident_status",
+        "reported_on", "last_updated_on", "observed_through",
+    ),
+    "gold_planned_room_closure": tables["facility_closure"].select(
+        "closure_key", "campus_key", "room_code", "closure_date",
+        "closure_reason", "status", "is_instruction_day",
+    ),
+    "gold_planned_closure_assignment": tables["planned_room_closure_impact"].select(
+        "closure_key", "schedule_id", "closure_date", "campus_key", "department_key",
+        "room_key", "teaching_assignment_key", "class_section_key", "subject_key",
+        "education_stage", "period_number", "planned_subject_student_count",
+    ),
+}
+for name, source_name in (
+    ("gold_room", "facility_room"),
+    ("gold_planned_assignment", "planned_timetable"),
+    ("gold_facility_incident", "facility_incident"),
+    ("gold_planned_room_closure", "facility_closure"),
+    ("gold_planned_closure_assignment", "planned_room_closure_impact"),
+):
+    require(detail_outputs[name].count() == source_counts[source_name],
+            f"{name} does not match the validated Silver row count.")
 totals = {
     "planned_weekly_assignment_count": gold_schedule.agg(
         F.sum("planned_weekly_assignment_count").alias("value")
@@ -129,7 +163,7 @@ require(
     },
     f"Gold enrichment totals differ from the validated snapshot: {totals}.",
 )
-for name, frame in outputs.items():
+for name, frame in {**outputs, **detail_outputs}.items():
     (
         frame.withColumn("_source_sql_batch_id", F.lit(source["SourceSqlBatchId"]))
         .withColumn("_source_snapshot_date", F.to_date(F.lit(source["SourceSnapshotDate"])))

@@ -197,6 +197,27 @@ sensitive characteristics from names or create real contact details.
 
 ## Deployment status
 
+- The owner deleted the earlier `Macaw Education` semantic model and the two
+  original Data Agents because they used the wrong source. Earlier model and
+  agent deployment and smoke-test results below are historical. The existing
+  Foundry version still references those deleted agents and is not a verified
+  path to the new Gold agents.
+- Two unshared Direct Lake models, `Macaw Gold School Operations` and
+  `Macaw Gold Learning Outcomes`, now use detailed Gold facts. Both refreshed;
+  administrator DAX checks returned 5,600 students, 280 classes, 336,000
+  student-days, 2,485 weekly assignments, 20 incidents, 17 planned overlaps
+  and 87,100 assessment results. Department selection and the absence of
+  subject-level attendance were also checked in DAX.
+- Their published, unshared Data Agents returned correct Dutch enrollment and
+  qualitative-outcome results in administrator MCP smoke tests. Operations
+  initially misrepresented overall attendance as Dutch lesson attendance;
+  one retest correctly declined after instructions changed, but a department
+  student-day question was incorrectly rejected as unsupported, even after
+  stale Data Agent element descriptions were corrected and republished. A
+  Power BI schema response still showed old aggregate metadata after the
+  model update; its cause is unconfirmed. Do not treat the agents as reliable or connect
+  them to Foundry until investigated and retested. Prep data for AI and
+  restricted-user security remain open.
 - Three schema-enabled Lakehouses, `MacawEducationBronze`,
   `MacawEducationSilver` and `MacawEducationGold`, have been created in the
   project workspace. `Macaw Bronze to Silver` and `Macaw Silver to Gold`
@@ -216,9 +237,8 @@ sensitive characteristics from names or create real contact details.
   rerun after the schema-shortcut migration and the manifests and Silver
   counts were validated again.
   No pipeline schedule, external failure-notification connection or
-  permissions were configured. HorizonDB and Gold-backed models remain
-  planned; restricted-user access to the Lakehouses and their endpoints is
-  unverified.
+  permissions were configured. HorizonDB remains planned; restricted-user
+  access to the Lakehouses and their endpoints is unverified.
 - The owner replaced the SQL and Cosmos `Files` shortcuts with three Bronze
   schema shortcuts: `sql`, `CosmosDB` and `PostGre`. CSV files remain under
   `Files`. OneLake's table catalog lists 27 SQL tables, one Cosmos table and

@@ -1,8 +1,9 @@
 # Medallion architecture for agent-ready education data
 
 This is the target architecture for [issue #7](https://github.com/frdeange/macaw-education-fabric-poc/issues/7).
-The existing SQL database, its OneLake mirror, the initial semantic model,
-the unshared Data Agents and the Foundry agent remain the current deployment.
+The existing SQL database and its OneLake mirror remain deployed. The owner
+deleted the initial semantic model and Data Agents; the existing Foundry version
+still references those deleted agents.
 The three schema-enabled Lakehouses are deployed and their SQL endpoints are
 available. The owner created schema shortcuts for the SQL, Cosmos and
 PostgreSQL mirrors in Bronze. The first SQL-mirror-only Silver/Gold pipeline
@@ -13,8 +14,10 @@ migration. Bronze also contains the immutable raw timetable/holiday batch
 `timetable-2026-2027-v2`, whose three files matched their local SHA-256
 digests. Later enrichment runs replaced an earlier incomplete staging batch.
 The four-stage pipeline was deployed, read back and run; all four manifests
-and Silver/Gold totals were validated through their SQL endpoints. Gold-backed
-models have not been deployed; restricted-user access is unverified.
+and Silver/Gold totals were validated through their SQL endpoints. Two
+Gold-backed models and agents have since been created without sharing.
+Detailed Gold products and revised models have been deployed and checked as
+an administrator. Agent acceptance and restricted-user access remain open.
 
 ## Data flow
 
@@ -269,6 +272,69 @@ rate is `(Present + Late) / all observed attendance records`. Assessment
 averages use numeric marks only; qualitative primary outcomes are counted
 separately. No planned timetable, lesson attendance, or facilities data is
 included in this first SQL-only slice; enrichment products are separate.
+
+The aggregate-only products discard student, assessment, schedule and incident
+identifiers needed for valid distinct counts and richer cross-source questions.
+The revised design retains separate detailed Gold facts and a distinct
+campus/student/department bridge alongside the existing aggregates. The bridge
+supports selecting student-day attendance for learners taking a department's
+subjects; it does not create subject- or lesson-level attendance. Department
+membership overlaps, so department subtotals are not additive. These new
+products are not security controls and must remain unshared until tested.
+
+The detailed products have these intended grains:
+
+| Product | One row represents | Source |
+| --- | --- | --- |
+| Enrollment detail | One learner enrollment in one class section | SQL enrollment |
+| Subject enrollment detail | One enrolled learner taking one subject | SQL teaching assignment and subject enrollment |
+| Student department bridge | One enrolled learner associated with one department at a campus | Distinct subject-enrollment departments |
+| Attendance detail | One observed learner-day | SQL attendance and school calendar |
+| Assessment result detail | One learner's result for one assessment | SQL assessment and result |
+| Room | One room at one campus | PostgreSQL |
+| Planned assignment | One recurring weekly teaching assignment | Timetable CSV, SQL and PostgreSQL |
+| Planned room closure | One planned room closure on a date | PostgreSQL and SQL school calendar |
+| Planned closure assignment | One scheduled assignment overlapping one planned closure | Timetable, PostgreSQL and school calendar |
+| Facility incident | One observed incident through the snapshot date | Cosmos DB |
+
+These are curated, conformed projections of validated Silver facts rather than
+raw copies of Bronze. No names are included. Both models now use detailed
+facts, conformed dimensions and distinct-count measures; the operations model
+uses subject enrollment to select students for department attendance. The
+separate student-department bridge is retained in Gold but is not a model
+security control. Existing aggregates remain optional products, not sources
+for summing overlapping student or class counts.
+
+Both Gold notebook jobs completed, with validated manifests. Administrator SQL
+readback found 5,600 enrollments, 43,550 subject enrollments, 31,450 distinct
+student-department associations, 336,000 student-days, 87,100 results, 300
+rooms, 2,485 planned assignments, 20 incidents, 10 closures and 17 planned
+overlaps. Selected columns matched Silver in Gold-to-Silver `EXCEPT` checks;
+these checks do not prove full row equality or freshness.
+
+Both revised Direct Lake models refreshed. Administrator DAX checks matched
+the totals and the Science and Technology selection of 4,250 students,
+255,000 student-days and 239,700 Present-or-Late records. A subject filter
+returned blank for student-day attendance; Dutch enrollment at Amsterdam
+returned 960. The outcomes model matched SQL totals and selected subject
+breakdowns. These are not restricted-user tests.
+
+Both published agents remain unshared. MCP smoke tests returned 960 Dutch
+students at each campus and 38,400 qualitative outcomes. The operations
+agent initially misrepresented overall attendance as Dutch lesson attendance.
+After its instructions were clarified, one retest correctly declined that
+question, but a separate department student-day question incorrectly claimed
+the data was unavailable. Published agent element descriptions still
+contained old aggregate-only descriptions; these were corrected and verified
+after republication, but the department question was still incorrectly
+rejected. A Power BI schema response also continued to show old aggregate
+metadata after the model update; the cause is unconfirmed.
+Do not treat the agents as reliable or connect them to Foundry until these
+behaviors are investigated and representative tests pass. Prep data for AI
+configuration and restricted-user security remain unverified.
+
+Snapshot-specific count checks and asynchronous source mirrors are not a
+general freshness guarantee.
 
 ### Four-source enrichment
 
