@@ -1,6 +1,6 @@
 {
   "properties": {
-    "description": "Sequential SQL-mirror Silver and Gold transformations for the verified education snapshot.",
+    "description": "Sequential SQL snapshot and four-source enrichment transformations for the education snapshot.",
     "parameters": {
       "expected_snapshot_date": {
         "type": "String",
@@ -64,6 +64,57 @@
         }
       },
       {
+        "name": "BronzeEnrichmentToSilver",
+        "type": "TridentNotebook",
+        "dependsOn": [
+          {
+            "activity": "SilverToGold",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 60
+        },
+        "typeProperties": {
+          "notebookId": "__BRONZE_ENRICHMENT_NOTEBOOK_ID__",
+          "workspaceId": "__WORKSPACE_ID__",
+          "parameters": {
+            "expected_snapshot_date": {
+              "value": {
+                "value": "@pipeline().parameters.expected_snapshot_date",
+                "type": "Expression"
+              },
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "SilverEnrichmentToGold",
+        "type": "TridentNotebook",
+        "dependsOn": [
+          {
+            "activity": "BronzeEnrichmentToSilver",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 60
+        },
+        "typeProperties": {
+          "notebookId": "__GOLD_ENRICHMENT_NOTEBOOK_ID__",
+          "workspaceId": "__WORKSPACE_ID__"
+        }
+      },
+      {
         "name": "FailAfterBronzeToSilver",
         "type": "Fail",
         "dependsOn": [
@@ -93,6 +144,38 @@
         "typeProperties": {
           "message": "Silver-to-Gold failed. Inspect the notebook activity error before retrying.",
           "errorCode": "MacawSilverToGoldFailed"
+        }
+      },
+      {
+        "name": "FailAfterBronzeEnrichmentToSilver",
+        "type": "Fail",
+        "dependsOn": [
+          {
+            "activity": "BronzeEnrichmentToSilver",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "message": "Bronze enrichment failed. Inspect the notebook activity error before retrying.",
+          "errorCode": "MacawBronzeEnrichmentFailed"
+        }
+      },
+      {
+        "name": "FailAfterSilverEnrichmentToGold",
+        "type": "Fail",
+        "dependsOn": [
+          {
+            "activity": "SilverEnrichmentToGold",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "message": "Gold enrichment failed. Inspect the notebook activity error before retrying.",
+          "errorCode": "MacawGoldEnrichmentFailed"
         }
       }
     ]

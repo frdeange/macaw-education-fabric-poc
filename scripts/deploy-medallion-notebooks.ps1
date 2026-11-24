@@ -14,6 +14,10 @@ param(
     [string]$GoldName = 'MacawEducationGold',
     [string]$BronzeToSilverNotebookName = 'Macaw Bronze to Silver',
     [string]$SilverToGoldNotebookName = 'Macaw Silver to Gold',
+    [string]$BronzeEnrichmentNotebookName = 'Macaw Bronze Enrichment to Silver',
+    [string]$GoldEnrichmentNotebookName = 'Macaw Silver Enrichment to Gold',
+    [string]$SkillAttribution = 'e2e-medallion-architecture',
+    [switch]$OnlyEnrichment,
     [switch]$VerifyOnly
 )
 
@@ -22,25 +26,43 @@ Set-StrictMode -Version Latest
 
 foreach ($name in @(
     $BronzeName, $SilverName, $GoldName,
-    $BronzeToSilverNotebookName, $SilverToGoldNotebookName
+    $BronzeToSilverNotebookName, $SilverToGoldNotebookName,
+    $BronzeEnrichmentNotebookName, $GoldEnrichmentNotebookName, $SkillAttribution
 )) {
     if ([string]::IsNullOrWhiteSpace($name)) {
         throw 'Lakehouse and notebook names must not be empty.'
     }
 }
-$notebookNames = @($BronzeToSilverNotebookName, $SilverToGoldNotebookName)
+$notebookNames = if ($OnlyEnrichment) {
+    @($BronzeEnrichmentNotebookName, $GoldEnrichmentNotebookName)
+} else {
+    @($BronzeToSilverNotebookName, $SilverToGoldNotebookName)
+}
 if (@($notebookNames | Group-Object | Where-Object Count -gt 1).Count -gt 0) {
     throw 'Notebook names must be distinct.'
 }
 
 . (Join-Path $PSScriptRoot 'fabric-api.ps1')
 $headers = Get-FabricHeaders -SubscriptionId $SubscriptionId -TenantId $TenantId
-$headers['x-ms-fabric-skill'] = 'e2e-medallion-architecture'
+$headers['x-ms-fabric-skill'] = $SkillAttribution
 $api = 'https://api.fabric.microsoft.com/v1'
 $base = "$api/workspaces/$WorkspaceId"
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $builderPath = Join-Path $PSScriptRoot 'notebook_authoring.py'
-$notebookSpecs = @(
+$notebookSpecs = if ($OnlyEnrichment) { @(
+    @{
+        SourcePath = Join-Path $repoRoot 'notebooks\bronze_enrichment_to_silver.py'
+        DisplayName = $BronzeEnrichmentNotebookName
+        Description = 'Macaw CSV and Cosmos Bronze-to-Silver enrichment for the verified SQL snapshot.'
+        LakehouseName = $BronzeName
+    }
+    @{
+        SourcePath = Join-Path $repoRoot 'notebooks\silver_enrichment_to_gold.py'
+        DisplayName = $GoldEnrichmentNotebookName
+        Description = 'Macaw planned timetable and observed facilities incident Gold products.'
+        LakehouseName = $SilverName
+    }
+) } else { @(
     @{
         SourcePath = Join-Path $repoRoot 'notebooks\bronze_to_silver.py'
         DisplayName = $BronzeToSilverNotebookName
@@ -53,7 +75,7 @@ $notebookSpecs = @(
         Description = 'Macaw education Silver-to-Gold agent-ready Delta products.'
         LakehouseName = $SilverName
     }
-)
+) }
 
 try {
     $workspaces = @(Get-FabricItems -Uri "$api/workspaces" -Headers $headers |
@@ -94,7 +116,7 @@ try {
     }
 
     if ($VerifyOnly) {
-        Write-Host 'Both medallion notebook items and their target Lakehouses are present.'
+        Write-Host 'The selected medallion notebook items and their target Lakehouses are present.'
         return
     }
 

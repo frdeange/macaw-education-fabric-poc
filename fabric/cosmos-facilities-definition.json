@@ -1,0 +1,23 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/CosmosDB/definition/CosmosDB/2.0.0/schema.json",
+  "containers": [
+    {
+      "options": {
+        "autoscaleSettings": {
+          "maxThroughput": 1000
+        }
+      },
+      "resource": {
+        "id": "FacilityIncidents",
+        "partitionKey": {
+          "paths": [
+            "/campusKey"
+          ],
+          "kind": "Hash",
+          "version": 2,
+          "systemKey": false
+        }
+      }
+    }
+  ]
+}

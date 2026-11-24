@@ -1,0 +1,7 @@
+{
+  "sourceSchema": "public",
+  "tables": [
+    { "name": "facility_room", "keyColumns": ["room_key"] },
+    { "name": "facility_closure", "keyColumns": ["closure_key"] }
+  ]
+}

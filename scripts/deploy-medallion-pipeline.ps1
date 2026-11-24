@@ -11,6 +11,8 @@ param(
 
     [string]$BronzeToSilverNotebookName = 'Macaw Bronze to Silver',
     [string]$SilverToGoldNotebookName = 'Macaw Silver to Gold',
+    [string]$BronzeEnrichmentNotebookName = 'Macaw Bronze Enrichment to Silver',
+    [string]$GoldEnrichmentNotebookName = 'Macaw Silver Enrichment to Gold',
     [string]$PipelineName = 'Macaw Education Medallion',
     [switch]$VerifyOnly
 )
@@ -18,7 +20,10 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$notebookNames = @($BronzeToSilverNotebookName, $SilverToGoldNotebookName)
+$notebookNames = @(
+    $BronzeToSilverNotebookName, $SilverToGoldNotebookName,
+    $BronzeEnrichmentNotebookName, $GoldEnrichmentNotebookName
+)
 if ($notebookNames | Where-Object { [string]::IsNullOrWhiteSpace($_) }) {
     throw 'Notebook names must not be empty.'
 }
@@ -40,6 +45,8 @@ $definitionPath = Join-Path $repoRoot 'fabric\medallion-pipeline-content.json'
 $expectedNotebookDescriptions = @{
     $BronzeToSilverNotebookName = 'Macaw education Bronze-to-Silver validation and conformed Delta products.'
     $SilverToGoldNotebookName = 'Macaw education Silver-to-Gold agent-ready Delta products.'
+    $BronzeEnrichmentNotebookName = 'Macaw CSV and Cosmos Bronze-to-Silver enrichment for the verified SQL snapshot.'
+    $GoldEnrichmentNotebookName = 'Macaw planned timetable and observed facilities incident Gold products.'
 }
 
 try {
@@ -78,7 +85,7 @@ try {
         if ($pipelines.Count -ne 1) {
             throw "Pipeline '$PipelineName' is missing in verify-only mode."
         }
-        Write-Host "Pipeline item and both prerequisite notebooks are present: $PipelineName."
+        Write-Host "Pipeline item and all four prerequisite notebooks are present: $PipelineName."
         return
     }
     if (-not (Test-Path -LiteralPath $definitionPath -PathType Leaf)) {
@@ -92,7 +99,14 @@ try {
     $goldNotebook = @($items | Where-Object {
         $_.type -eq 'Notebook' -and $_.displayName -ceq $SilverToGoldNotebookName
     })
-    if ($bronzeNotebook.Count -ne 1 -or $goldNotebook.Count -ne 1) {
+    $bronzeEnrichmentNotebook = @($items | Where-Object {
+        $_.type -eq 'Notebook' -and $_.displayName -ceq $BronzeEnrichmentNotebookName
+    })
+    $goldEnrichmentNotebook = @($items | Where-Object {
+        $_.type -eq 'Notebook' -and $_.displayName -ceq $GoldEnrichmentNotebookName
+    })
+    if ($bronzeNotebook.Count -ne 1 -or $goldNotebook.Count -ne 1 -or
+        $bronzeEnrichmentNotebook.Count -ne 1 -or $goldEnrichmentNotebook.Count -ne 1) {
         throw 'Notebook items changed while preparing the pipeline; inspect before retrying.'
     }
 
@@ -103,6 +117,10 @@ try {
         ForEach-Object { $_.typeProperties.notebookId = $bronzeNotebook[0].id }
     $activities | Where-Object { $_.name -eq 'SilverToGold' } |
         ForEach-Object { $_.typeProperties.notebookId = $goldNotebook[0].id }
+    $activities | Where-Object { $_.name -eq 'BronzeEnrichmentToSilver' } |
+        ForEach-Object { $_.typeProperties.notebookId = $bronzeEnrichmentNotebook[0].id }
+    $activities | Where-Object { $_.name -eq 'SilverEnrichmentToGold' } |
+        ForEach-Object { $_.typeProperties.notebookId = $goldEnrichmentNotebook[0].id }
     foreach ($activity in $activities) {
         if ($activity.type -eq 'TridentNotebook') {
             $activity.typeProperties.workspaceId = $WorkspaceId.ToString()
@@ -155,7 +173,7 @@ try {
         throw "Pipeline item was not uniquely verified after it was $operation."
     }
     Write-Host "Pipeline definition ${operation}: $PipelineName."
-    Write-Host 'The pipeline was not run; no Spark jobs or Silver/Gold tables were produced.'
+    Write-Host 'Definition deployment does not run the pipeline; verify job history and output tables separately.'
 } finally {
     $headers.Clear()
 }
