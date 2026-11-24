@@ -246,8 +246,7 @@ sensitive characteristics from names or create real contact details.
 - Synthetic HorizonDB seed data and PostgreSQL DDL/validation scripts are
   versioned under `data/sources/horizondb/` and `postgres/`: 300 rooms and 10
   planned room closures. No HorizonDB item was created; the DDL and seed
-  were applied to Azure PostgreSQL, but no facilities mirror
-  has been verified. In the signed-in
+  were applied to Azure PostgreSQL. In the signed-in
   Fabric portal, the workspace's New item catalog did not offer HorizonDB,
   and no HorizonDB-specific tenant setting was visible. The reason is
   unconfirmed; preview eligibility and capacity/cost review remain open.
@@ -260,9 +259,10 @@ sensitive characteristics from names or create real contact details.
   Microsoft Entra authentication enabled, password authentication disabled,
   and public network access enabled. It incurs compute and storage charges.
   The `macaw_facilities` database, an Entra administrator in the
-  project tenant and a system-assigned managed identity exist; no Fabric
-  permissions were granted to that identity. The 300 rooms and 10 closures were
-  loaded and verified row by row. No facilities mirror has been deployed.
+  project tenant and a system-assigned managed identity exist. The 300 rooms
+  and 10 closures were loaded and verified row by row. Fabric's tutorial says
+  mirror creation automatically grants that identity read/write on the mirror;
+  the effective grant has not been independently audited.
   An Azure-services firewall rule allows connection attempts from all Azure
   subscriptions, while Entra authentication remains required. A temporary
   client IP rule used for seeding was removed. Consumer security remains
@@ -285,8 +285,7 @@ sensitive characteristics from names or create real contact details.
   completed before loading the facilities database. Readback shows
   `azure.fabric_mirror_enabled=on` and `wal_level=logical`, with the server
   Ready. The administrator's read-only CDC prerequisites and both table
-  eligibility checks passed against the database. This preparation
-  is not a deployed Fabric mirror or proof that replication works.
+  eligibility checks passed against the database.
 - The PostgreSQL loader has an optional, read-only source readiness check for
   CDC registration, effective role permissions, the extension's
   pre-creation `check_prerequisites()` result and table eligibility. Its
@@ -296,11 +295,21 @@ sensitive characteristics from names or create real contact details.
   The mirrored school calendar marks both planned closure dates instructional
   for all five campuses; the 17 local schedule overlaps remain plans, not
   observed events or validated Gold results.
+- The PostgreSQL mirror was created through the portal using an encrypted
+  organizational-account cloud connection without a gateway. The two
+  facilities tables were selected with automatic mirroring of future tables
+  disabled. Both report `Replicating`, and the SQL endpoint's 300 rooms and
+  10 closures match the previously validated source seed row by row. Delta
+  logs were observed under `Tables/_public/`. This point-in-time comparison
+  does not test subsequent source changes or restricted-user isolation.
 - PostgreSQL Bronze shortcut deployment is prepared, not deployed. The
-  preflight currently requires an encrypted VNet gateway connection, explicit
-  two-table mirror definition, paginated status and manually observed Delta
-  paths; adapt it for the public cloud connection. Tests use simulated
-  responses. It does not establish row equality,
+  preflight accepts an encrypted OAuth cloud or VNet connection and requires
+  an explicit two-table definition, paginated status and observed Delta paths.
+  The live definition omits `mountedTables`, so the preflight fails closed.
+  The definition documentation says omission selects all tables including
+  future ones, conflicting with the portal observation; the effective
+  selection is unconfirmed. Successful preflight tests use simulated
+  responses. It does not establish
   freshness, pipeline access or isolation. The
   `fabric/POSTGRES_SHORTCUT_DEPLOYMENT_BLOCKED` marker prevents the included
   shortcut script from creating paths until the independent security and

@@ -45,11 +45,11 @@ function Test-PostgresMirror {
 
     $connection = Invoke-RestMethod -Uri "$api/connections/$ConnectionId" -Headers $Headers
     if ($connection.id -ne $ConnectionId.ToString() -or
-        $connection.connectivityType -ne 'VirtualNetworkGateway' -or
+        $connection.connectivityType -notin @('VirtualNetworkGateway', 'ShareableCloud') -or
         $connection.connectionDetails.path -cne $ConnectionPath -or
         $connection.credentialDetails.credentialType -ne 'OAuth2' -or
         $connection.credentialDetails.connectionEncryption -ne 'Encrypted') {
-        throw 'The PostgreSQL mirror connection does not match the reviewed encrypted VNet gateway connection.'
+        throw 'The PostgreSQL mirror connection does not match the reviewed encrypted cloud or VNet gateway connection.'
     }
 
     $response = Invoke-WebRequest -Method Post -Uri "$mirrorUri/getDefinition" -Headers $Headers `

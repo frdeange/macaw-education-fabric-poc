@@ -57,7 +57,9 @@ external failure-notification connection. A reproducible timetable and
 regional holiday batch is landed in Bronze as immutable raw files. Cosmos
 contains 20 fictional incident documents and 40 history events; its mirror
 and Bronze shortcut were checked against the source. Azure PostgreSQL contains
-300 synthetic rooms and 10 planned closures; its mirror is not yet created.
+300 synthetic rooms and 10 planned closures. Its new mirror reports both tables
+replicating, and all mirrored SQL endpoint rows match the validated seed; its
+Bronze shortcuts and restricted-user security remain unverified.
 An interrupted enrichment run left partial Silver tables and a `Staging`
 manifest; those tables are not validated products. The draft enrichment
 notebooks are blocked until the PostgreSQL mirror is integrated.
@@ -289,8 +291,12 @@ in any subscription, not just this tenant. Authentication is still required.
 A temporary client IP rule used for loading was removed. The server incurs
 compute and storage costs. The source schema and 300 rooms and 10 closures
 were loaded and compared row by row with the synthetic generator. The source
-CDC prerequisite and table eligibility checks passed under the administrator;
-the Fabric connection, mirror, replication and security remain unverified.
+CDC prerequisite and table eligibility checks passed under the administrator.
+An encrypted organizational-account cloud connection and a mirrored database
+were created in Fabric. Both facilities tables report `Replicating`; their
+300 and 10 SQL endpoint rows match the seed that was compared with the source.
+This is a point-in-time comparison, not a test of subsequent source changes or
+consumer security.
 
 The [Fabric pipeline PostgreSQL connector](https://learn.microsoft.com/en-us/fabric/data-factory/connector-azure-database-for-postgresql-overview)
 documents Basic authentication for Script activity, whereas the
@@ -301,8 +307,7 @@ seed this Entra-only server. A
 can connect Spark workloads to PostgreSQL, but does not establish a mirroring
 connection. The documented
 [NotebookUtils token audiences](https://learn.microsoft.com/en-us/fabric/data-engineering/notebookutils/notebookutils-credentials#get-token)
-do not include PostgreSQL. The public route avoids a VNet gateway; it does not
-establish that a Fabric connection or mirror is working.
+do not include PostgreSQL. The public mirroring route uses no VNet gateway.
 
 The local `scripts/load_postgres_facilities.py` prepares and validates the
 same deterministic rooms and closures in one database transaction. It refuses
@@ -363,19 +368,26 @@ Entra-role example does not explicitly grant them; verify the effective
 requirements for the chosen identity rather than assuming either example is
 complete.
 
-The PostgreSQL mirror and its Bronze shortcuts have **not** been created.
-First restrict and verify source, workspace and OneLake access in an
-isolated development environment. Configure the mirror using the
-documented PostgreSQL tutorial; do not grant consumer access. Select only
-`public.facility_room` and `public.facility_closure`; do not select all tables.
-Review the encrypted cloud connection and observe the actual OneLake table
-paths before configuring the placeholder values in
+The PostgreSQL mirror exists, but its Bronze shortcuts have **not** been
+created. The portal selected `public.facility_room` and
+`public.facility_closure` with automatic mirroring of future tables disabled.
+Fabric reports both tables as `Replicating`; the administrator could read
+their Delta logs under `Tables/_public/`. Restrict and verify source, workspace
+and OneLake access before granting consumer access. Review the encrypted cloud
+connection and observed OneLake paths before configuring the placeholder values in
 [`settings.example.ps1`](./settings.example.ps1) locally. The two paths must
 be under the same `Tables/` folder and end in their exact table names. If the
 observed paths differ, stop and review the implementation instead of guessing.
 
-The existing shortcut script supports only a VNet gateway connection and must
-be updated and tested for the public cloud connection before it can be used.
+The shortcut preflight accepts an encrypted OAuth cloud or VNet connection.
+However, the live mirror's returned definition does not contain
+`mountedTables`, so the preflight currently fails closed even though the portal
+selection and table statuses show the two expected tables. The
+[definition documentation](https://learn.microsoft.com/en-us/rest/api/fabric/articles/item-management/definitions/mirrored-database-definition)
+says an omitted `mountedTables` means all tables, including future tables,
+are mirrored. This conflicts with the portal observation; the effective
+selection remains unconfirmed. Do not remove the check without a reliable way
+to verify the persistent selection.
 The following
 **read-only** preflight calls Fabric status and definition APIs and checks
 the source Delta logs; it does not create the mirror, gateway, directory, or
@@ -392,7 +404,7 @@ mirror, even though the preflight does not update it.
 .\tests\test_postgres_bronze_shortcuts.ps1
 ```
 
-The preflight requires the reviewed encrypted OAuth VNet gateway connection, an
+The preflight requires the reviewed encrypted OAuth cloud or VNet connection, an
 explicit two-table mirror definition, `Running`/`Replicating` statuses and
 accessible Delta logs. Status and timestamps do not prove row equality or
 freshness. Independently compare every source and mirrored row, confirm the
@@ -402,7 +414,9 @@ source, mirror, OneLake and Bronze before exposing any path.
 blocks shortcut creation in this checkout until those gates pass; it is not an
 access control. After review and release of the block, omit `-PreflightOnly`
 to create missing shortcuts, or use `-VerifyOnly` to check existing shortcuts.
-The implementation has only been tested against simulated Fabric responses.
+The cloud-connection check has been tested with simulated responses and against
+the live connection; the complete preflight has not passed against the live
+mirror.
 
 ## Deploy and test
 

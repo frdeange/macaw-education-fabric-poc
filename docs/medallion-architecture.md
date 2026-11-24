@@ -13,9 +13,9 @@ batch `timetable-2026-2027-v2`; its three uploaded files were read back and
 matched their local SHA-256 digests. Cosmos incident documents, their mirror
 and the Bronze shortcut have also been verified. An interrupted enrichment
 run left partial Silver tables with a `Staging` manifest, not validated
-products; no enrichment Gold notebook ran. PostgreSQL facilities have not
-been mirrored, and Gold-backed models have not been deployed. PostgreSQL has
-been seeded and validated.
+products; no enrichment Gold notebook ran. The PostgreSQL facilities mirror
+reports both tables replicating and its SQL endpoint rows match the validated
+seed; its Bronze shortcuts and Gold-backed models have not been deployed.
 Restricted-user access to the Lakehouses and their endpoints is unverified.
 
 ## Data flow
@@ -23,7 +23,7 @@ Restricted-user access to the Lakehouses and their endpoints is unverified.
 ```text
 Fabric SQL Database --> native OneLake mirror ------+
                                                    |
-PostgreSQL facilities --> OneLake mirror (pending)-+--> Bronze --> Silver --> Gold
+PostgreSQL facilities --> OneLake mirror --pending-+--> Bronze --> Silver --> Gold
   (HorizonDB preferred; Azure fallback in use)      |                      /       \
 Fabric Cosmos DB ----> OneLake mirror -------------+             Operations      Outcomes
 Synthetic timetable CSV + official holiday dates --+             model           model
@@ -57,12 +57,15 @@ The prepared source schema enforces closure-to-room campus consistency, and
 its validator checks the source keys and foreign key. These have only been
 tested against Azure PostgreSQL with 300 rooms and 10 planned closures.
 The `macaw_facilities` database, a project-tenant Entra administrator
-and a system-assigned managed identity exist; no Fabric permissions were
-granted to the identity. The administrator's CDC prerequisites and both
-tables' eligibility passed. An Azure-services firewall rule permits connection
-attempts from all Azure subscriptions; Entra authentication remains required.
-The temporary client IP rule used for seeding was removed. The Fabric cloud
-connection, mirror and consumer security remain unverified.
+and a system-assigned managed identity exist. The mirroring tutorial says
+creation grants that identity read/write on the mirror; its effective
+permissions have not been independently audited. The administrator's CDC
+prerequisites and both tables' eligibility passed. An Azure-services firewall
+rule permits connection attempts from all Azure subscriptions; Entra
+authentication remains required.
+The temporary client IP rule used for seeding was removed. An encrypted
+organizational-account cloud connection and a facilities mirror are deployed.
+Consumer security remains unverified.
 
 The current identity can see one VNet outside the project resource group,
 with no Power Platform-delegated subnet; its ownership and suitability are
@@ -73,16 +76,24 @@ Do not modify the existing VNet without approval.
 The source loader now includes the extension's pre-creation
 `azure_cdc.check_prerequisites()` check in addition to the role and table
 checks. The PostgreSQL shortcut path is prepared locally with an explicit
-two-table contract and a mirror preflight, but no mirror or shortcut exists.
-The preflight requires manually observed table paths and checks the VNet
-connection, definition, paginated replication status and Delta-log access. It
+two-table contract and a mirror preflight, but no facilities shortcut exists.
+Both selected tables report `Replicating`, and the 300 room and 10 closure
+rows in the SQL analytics endpoint match the previously validated source seed.
+Their Delta logs were observed under `Tables/_public/`. The preflight accepts
+the encrypted cloud connection or VNet connection, and checks the definition,
+paginated replication status and manually observed Delta-log paths. It
 does not prove source-to-mirror equality, current data, pipeline access, or
 security.
 [`POSTGRES_SHORTCUT_DEPLOYMENT_BLOCKED`](../fabric/POSTGRES_SHORTCUT_DEPLOYMENT_BLOCKED)
 prevents the included script from creating PostgreSQL shortcuts until the
 independent security and validation gates are met; it is not an access control.
-The mirror checks have only been exercised against simulated responses and
-currently require a VNet connection; adapt them before using a cloud connection.
+The live preflight fails closed because the returned definition omits
+`mountedTables`; the portal showed the two-table selection with future tables
+disabled. The [definition documentation](https://learn.microsoft.com/en-us/rest/api/fabric/articles/item-management/definitions/mirrored-database-definition)
+says omitting `mountedTables` selects all tables, including future tables.
+The effective selection remains unconfirmed. The definition check must not be
+bypassed without another reliable verification of persistent selection. The
+successful preflight tests use simulated responses.
 
 No separate scheduling application or DUO dataset is required. All pupil,
 teacher, timetable and facilities data are synthetic. Government holiday dates

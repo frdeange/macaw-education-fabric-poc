@@ -29,6 +29,7 @@ function Reset-Fixture {
         SourceType = 'AzurePostgreSql'
         DefinitionConnection = $connectionId.ToString()
         MountedTables = @('facility_room', 'facility_closure')
+        OmitMountedTables = $false
         MirrorStatus = 'Running'
         RoomStatus = 'Replicating'
         RoomSync = '2026-01-01T00:00:00Z'
@@ -64,7 +65,7 @@ function Get-FixtureDefinition {
     $mounted = @($global:MacawPostgresShortcutTest.MountedTables | ForEach-Object {
         @{ source = @{ typeProperties = @{ schemaName = 'public'; tableName = $_ } } }
     })
-    $payload = @{
+    $definition = @{
         properties = @{
             source = @{
                 type = $global:MacawPostgresShortcutTest.SourceType
@@ -76,7 +77,11 @@ function Get-FixtureDefinition {
             }
             mountedTables = $mounted
         }
-    } | ConvertTo-Json -Depth 12 -Compress
+    }
+    if ($global:MacawPostgresShortcutTest.OmitMountedTables) {
+        $definition.properties.Remove('mountedTables')
+    }
+    $payload = $definition | ConvertTo-Json -Depth 12 -Compress
     $part = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($payload))
     @{ definition = @{ parts = @(@{ path = 'mirroring.json'; payloadType = 'InlineBase64'; payload = $part }) } } |
         ConvertTo-Json -Depth 12 -Compress
@@ -299,6 +304,11 @@ try {
     Assert-NoWrites
 
     Reset-Fixture
+    $global:MacawPostgresShortcutTest.ConnectivityType = 'ShareableCloud'
+    Invoke-Deployment -PreflightOnly
+    Assert-NoWrites
+
+    Reset-Fixture
     $global:MacawPostgresShortcutTest.RoomSync = [DateTime]::SpecifyKind(
         [DateTime]'2026-01-01T00:00:00', [DateTimeKind]::Utc
     )
@@ -328,13 +338,13 @@ try {
     Assert-NoWrites
 
     foreach ($case in @(
-        @{ Property = 'ConnectionPath'; Value = 'another-server;database'; Error = 'reviewed encrypted VNet gateway connection' }
-        @{ Property = 'ConnectivityType'; Value = 'ShareableCloud'; Error = 'reviewed encrypted VNet gateway connection' }
-        @{ Property = 'ConnectivityType'; Value = 'OnPremisesGateway'; Error = 'reviewed encrypted VNet gateway connection' }
-        @{ Property = 'CredentialType'; Value = 'Basic'; Error = 'reviewed encrypted VNet gateway connection' }
-        @{ Property = 'Encryption'; Value = 'Any'; Error = 'reviewed encrypted VNet gateway connection' }
+        @{ Property = 'ConnectionPath'; Value = 'another-server;database'; Error = 'reviewed encrypted cloud or VNet gateway connection' }
+        @{ Property = 'ConnectivityType'; Value = 'OnPremisesGateway'; Error = 'reviewed encrypted cloud or VNet gateway connection' }
+        @{ Property = 'CredentialType'; Value = 'Basic'; Error = 'reviewed encrypted cloud or VNet gateway connection' }
+        @{ Property = 'Encryption'; Value = 'Any'; Error = 'reviewed encrypted cloud or VNet gateway connection' }
         @{ Property = 'SourceType'; Value = 'AzureSqlDatabase'; Error = 'expected PostgreSQL connection' }
         @{ Property = 'DefinitionConnection'; Value = $operationId.ToString(); Error = 'expected PostgreSQL connection' }
+        @{ Property = 'OmitMountedTables'; Value = $true; Error = 'explicitly select only' }
         @{ Property = 'MountedTables'; Value = @('facility_room'); Error = 'explicitly select only' }
         @{ Property = 'MountedTables'; Value = @('facility_room', 'facility_room'); Error = 'exactly once' }
         @{ Property = 'MirrorStatus'; Value = 'Paused'; Error = 'not running cleanly' }
