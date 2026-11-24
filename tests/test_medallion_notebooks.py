@@ -204,22 +204,47 @@ class MedallionNotebookTests(unittest.TestCase):
         self.assertIn('F.col("IsInstructionDay")', silver)
         self.assertIn('manifest["RunStatus"] == "Validated"', gold)
 
-    def test_enrichment_preserves_plan_observation_and_pending_postgres_boundaries(self):
+    def test_enrichment_preserves_plan_and_observation_boundaries(self):
         silver = (ROOT / "notebooks" / "bronze_enrichment_to_silver.py").read_text(encoding="utf-8")
         gold = (ROOT / "notebooks" / "silver_enrichment_to_gold.py").read_text(encoding="utf-8")
         self.assertIn('F.from_json("events", event_schema)', silver)
         self.assertIn('F.col("occurred_on") > F.lit(expected_snapshot_date)', silver)
-        self.assertIn('source["PostgreSQLStatus"] == "Pending"', gold)
         self.assertIn('"planned_weekly_assignment_count"', gold)
         self.assertNotIn("FirstName", silver + gold)
         self.assertNotIn("LastName", silver + gold)
 
-    def test_enrichment_drafts_fail_closed_until_postgres_is_integrated(self):
-        for name in ("bronze_enrichment_to_silver.py", "silver_enrichment_to_gold.py"):
-            with self.subTest(name=name):
-                source = (ROOT / "notebooks" / name).read_text(encoding="utf-8")
-                with self.assertRaisesRegex(RuntimeError, "PostgreSQL rooms and closures mirror"):
-                    exec(compile(source, name, "exec"), {})
+    def test_gold_rejects_unvalidated_or_mismatched_postgres_batches(self):
+        source_path = ROOT / "notebooks" / "silver_enrichment_to_gold.py"
+        tree = ast.parse(source_path.read_text(encoding="utf-8"))
+        check = next(
+            node.value.args[0]
+            for node in tree.body
+            if isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Name)
+            and node.value.func.id == "require"
+            and len(node.value.args) == 2
+            and isinstance(node.value.args[1], ast.Constant)
+            and node.value.args[1].value
+            == "Gold enrichment requires the current validated SQL and enrichment batches."
+        )
+        expression = compile(ast.Expression(check), str(source_path), "eval")
+        sql_manifest = {
+            "RunStatus": "Validated", "BatchId": "sql-batch",
+            "SourceSnapshotDate": "2026-11-20",
+        }
+        source = {
+            "RunStatus": "Validated", "SourceSqlBatchId": "sql-batch",
+            "SourceSnapshotDate": "2026-11-20", "PostgreSQLStatus": "Validated",
+        }
+        self.assertTrue(eval(expression, {"sql_manifest": sql_manifest, "source": source}))
+        for field, value in (
+            ("PostgreSQLStatus", "Pending"), ("RunStatus", "Staging"),
+            ("SourceSqlBatchId", "other"), ("SourceSnapshotDate", "2026-11-19"),
+        ):
+            with self.subTest(field=field):
+                changed = dict(source, **{field: value})
+                self.assertFalse(eval(expression, {"sql_manifest": sql_manifest, "source": changed}))
 
 
 if __name__ == "__main__":

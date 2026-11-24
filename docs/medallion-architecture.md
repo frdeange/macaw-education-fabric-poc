@@ -8,12 +8,14 @@ available. The owner created schema shortcuts for the SQL, Cosmos and
 PostgreSQL mirrors in Bronze. The first SQL-mirror-only Silver/Gold pipeline
 run completed after an attendance-count contract correction; its products and
 validated manifests were read back through the SQL analytics endpoints before
-the shortcut migration. The adapted notebooks have not been rerun. Bronze
+the shortcut migration. The SQL-only pipeline was rerun successfully after the
+migration. Bronze
 also contains the immutable raw timetable/holiday batch
 `timetable-2026-2027-v2`, whose three files matched their local SHA-256
-digests. An interrupted enrichment run left partial Silver tables with a
-`Staging` manifest, not validated products; no enrichment Gold notebook ran.
-Gold-backed models have not been deployed; restricted-user access is unverified.
+digests. Later individual enrichment notebook runs replaced an earlier
+incomplete staging batch and validated four-source Silver and Gold products.
+The four-stage pipeline definition was deployed and read back. Gold-backed
+models have not been deployed; restricted-user access is unverified.
 
 ## Data flow
 
@@ -43,7 +45,7 @@ do not by themselves enforce a security boundary.
 | Fabric SQL Database | Reuse its existing asynchronous OneLake mirror. Ingest allowlisted operational tables, including enrollment and subject enrollment, rather than querying the transactional endpoint or relying on the old analytical snapshots. |
 | Fabric HorizonDB | A managed PostgreSQL **public preview** item containing synthetic rooms, capacities and closures. The 300-room, 10-planned-closure schema and seed are prepared under `postgres/`, but HorizonDB has not been created or seeded. For a database with Federated Analytics enabled, eligible tables mirror asynchronously to OneLake. Use Azure Database for PostgreSQL Flexible Server only if HorizonDB is unavailable and its fallback prerequisites are satisfied. |
 | Fabric Cosmos DB | A synthetic incident container with 20 documents and 40 historical events. Every mirrored document was compared with the reproducible seed; a Bronze shortcut points to the mirror. Room identifiers do not establish that an incident caused a planned closure. |
-| Timetable CSV | `scripts/generate_timetable.py` reproducibly creates 2,485 fictional weekly class, subject, teacher and room assignments. The immutable `v2` timetable and manifest are landed at `Files/landing/timetable/timetable-2026-2027-v2/`. The source assignment reconstruction matched the live SQL analytics endpoint: 2,485 expected and actual assignments, zero mismatches across keys, sections, subjects, or teachers. The generated room codes still await validation against HorizonDB. |
+| Timetable CSV | `scripts/generate_timetable.py` reproducibly creates 2,485 fictional weekly class, subject, teacher and room assignments. The immutable `v2` timetable and manifest are landed at `Files/landing/timetable/timetable-2026-2027-v2/`. The source assignment reconstruction matched the live SQL analytics endpoint: 2,485 expected and actual assignments, zero mismatches across keys, sections, subjects, or teachers. The enrichment run matched all room codes against the PostgreSQL mirror. |
 | Dutch holiday reference | The 21-row extract preserves the 18 regional 2026-2027 holiday ranges plus the three 2025-2026 summer ranges needed to validate the 2026 start of the snapshot. It includes official source URLs, school year, retrieval date, and advisory status. The SQL school calendar was not changed. |
 
 The approved Azure PostgreSQL fallback was provisioned before HorizonDB
@@ -146,8 +148,7 @@ The [metadata sync status API](https://learn.microsoft.com/en-us/rest/api/fabric
 reported legacy `V1`, with no migration in progress or recorded migration
 attempt. The schemas and tables were nevertheless returned by the SQL query.
 
-The SQL and blocked enrichment notebook definitions now use the schema paths.
-They were updated without running a pipeline or overwriting Silver/Gold.
+The SQL and enrichment notebook definitions now use the schema paths.
 The CSV and manifest files passed read-only checksum verification. Future
 source tables may also appear through a schema shortcut; PostgreSQL's
 persistent source-table selection remains unconfirmed.
@@ -182,11 +183,10 @@ An enrichment run was started before the PostgreSQL prerequisite and then
 cancelled. Although the job reports `Completed`, direct Delta readback found
 only 2,485 timetable, 21 holiday and 20 incident rows, with the manifest still
 `Staging`; the incident-event table was absent. These partial Silver tables
-are not validated products and must not be consumed. No enrichment Gold
-notebook ran. The deployed draft notebooks now fail before writing until the
-PostgreSQL mirror is verified and integrated. The complete transform must
-validate mirrored foreign keys and compare the calendar without silently
-rewriting it.
+were not validated products. Subsequent enrichment notebook runs replaced the
+staging batch and validated the PostgreSQL room and closure relationships,
+the planned timetable, the holiday calendar comparison and Cosmos incidents.
+The SQL calendar was not rewritten.
 
 The live SQL calendar comparison found 20 dates that remain instructional
 during the optional May 1-9, 2027 holiday extension: four dates at each of the
@@ -202,9 +202,9 @@ synthetic SQL calendar without approval.
 Silver validates keys, types, year-level and track eligibility, and joins the
 fictional campus, class, subject, calendar, timetable and facility records.
 Schedule revisions and cancellations must be resolved deterministically.
-Unknown rooms, capacities or enrollments are reported as unknown, not as
-conflict-free. Facility capacity checks use the enrollment relevant to each
-scheduled section and subject.
+The current snapshot validation rejects unknown rooms, capacities or
+enrollments rather than treating them as conflict-free. Facility capacity
+checks use the enrollment relevant to each scheduled section and subject.
 
 Gold publishes curated Delta facts and conformed dimensions for two domains:
 
@@ -269,8 +269,28 @@ disjoint populations. Attendance remains student-day data; the only supported
 rate is `(Present + Late) / all observed attendance records`. Assessment
 averages use numeric marks only; qualitative primary outcomes are counted
 separately. No planned timetable, lesson attendance, or facilities data is
-included in this first validated slice. The incomplete enrichment staging
-tables are separate and must not be consumed as products.
+included in this first SQL-only slice; enrichment products are separate.
+
+### Four-source enrichment
+
+The Silver enrichment validates the landed files and snapshot lineage,
+PostgreSQL room and closure keys and campus relationships, room capacity,
+recurring timetable joins, calendar dates and incident history. Its validated
+manifest and SQL endpoint readback contain 2,485 planned assignments, 21
+holiday rows, 300 rooms, 10 planned closures, 20 observed incidents and 40
+incident events. There are 17 planned closure/assignment overlaps and zero
+planned capacity exceedances. The 20 holiday-calendar variances are all in the
+advisory May extension. Gold aggregates 2,485 planned assignments, 43,550
+planned subject enrollment slots, 17 affected assignment/closure pairs and 20
+observed incidents. A closure can appear in more than one department; distinct
+closure counts across departments must not be added. Shared room identifiers
+do not establish that an incident caused a closure.
+
+These are administrator checks against the selected synthetic snapshot, not
+proof of mirror freshness, a consistent cross-source transaction or effective
+restricted-user permissions. The PostgreSQL definition's future-table
+selection remains unconfirmed. Keep all Lakehouse and endpoint paths unshared
+until cross-surface security and bypass tests pass.
 
 The notebooks write batch lineage and a one-row manifest. The Gold manifest's
 `Validated` status is a downstream processing gate, **not an access control**;
@@ -294,9 +314,10 @@ deployed both definitions successfully and does not run Spark or grant access.
 defines the ordered activities and their failure paths;
 [`deploy-medallion-pipeline.ps1`](../scripts/deploy-medallion-pipeline.ps1)
 deployed the `Macaw Education Medallion` item. A definition readback confirmed
-its four activities, ordered dependency, and both pipeline parameters. The
-corrected pipeline run completed and its Silver/Gold outputs and manifests
-were validated through the SQL analytics endpoints. Definition deployment
+four sequential notebook activities, four failure activities, and both
+pipeline parameters. The earlier SQL-only pipeline and the individual
+enrichment runs completed and their Silver/Gold outputs and manifests were
+validated through the SQL analytics endpoints. Definition deployment
 does not verify mirror freshness, external failure alerts, restricted-user
 access, or cross-Lakehouse data permissions.
 

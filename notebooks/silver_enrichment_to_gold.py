@@ -1,17 +1,11 @@
 # %% [markdown]
-# # Silver to Gold: planned schedules and observed incidents
+# # Silver to Gold: planned schedules, closures, and observed incidents
 #
-# These products are not a four-source consolidation: PostgreSQL rooms and
-# planned closures remain pending. A planned slot is not an observed lesson.
+# A planned slot or closure is not an observed lesson or incident.
 
 # %% [parameters]
 silver_lakehouse_name = "__SILVER_LAKEHOUSE_NAME__"
 gold_lakehouse_name = "__GOLD_LAKEHOUSE_NAME__"
-
-# %%
-raise RuntimeError(
-    "Draft notebook: verify and integrate the PostgreSQL rooms and closures mirror before execution."
-)
 
 # %%
 import json
@@ -35,7 +29,7 @@ require(
     and source["RunStatus"] == "Validated"
     and source["SourceSqlBatchId"] == sql_manifest["BatchId"]
     and source["SourceSnapshotDate"] == str(sql_manifest["SourceSnapshotDate"])
-    and source["PostgreSQLStatus"] == "Pending",
+    and source["PostgreSQLStatus"] == "Validated",
     "Gold enrichment requires the current validated SQL and enrichment batches.",
 )
 
@@ -45,7 +39,7 @@ def write_manifest(status, totals):
         [(
             source["SourceSqlBatchId"], source["SourceSnapshotDate"],
             source["TimetableBatchId"], source["IncidentBatchId"],
-            status, "Pending", json.dumps(totals, sort_keys=True),
+            status, source["PostgreSQLStatus"], json.dumps(totals, sort_keys=True),
         )],
         [
             "SourceSqlBatchId", "SourceSnapshotDate", "TimetableBatchId",
@@ -60,18 +54,29 @@ def write_manifest(status, totals):
 
 write_manifest("Staging", {})
 tables = {}
+source_counts = json.loads(source["RowCountsJson"])
 for name, source_batch in (
     ("planned_timetable", source["TimetableBatchId"]),
     ("regional_holiday", source["TimetableBatchId"]),
+    ("holiday_calendar_variance", source["TimetableBatchId"]),
     ("facility_incident", source["IncidentBatchId"]),
     ("facility_incident_event", source["IncidentBatchId"]),
+    ("facility_room", source["TimetableBatchId"]),
+    ("facility_closure", source["TimetableBatchId"]),
+    ("planned_room_closure_impact", source["TimetableBatchId"]),
 ):
     frame = spark.read.table(f"{silver_lakehouse_name}.dbo.{name}")
     lineage = frame.select("_batch_id", "_source_sql_batch_id").distinct().limit(2).collect()
     require(
-        len(lineage) == 1
-        and lineage[0]["_batch_id"] == source_batch
-        and lineage[0]["_source_sql_batch_id"] == source["SourceSqlBatchId"],
+        frame.count() == source_counts[name]
+        and (
+            (not lineage and source_counts[name] == 0)
+            or (
+                len(lineage) == 1
+                and lineage[0]["_batch_id"] == source_batch
+                and lineage[0]["_source_sql_batch_id"] == source["SourceSqlBatchId"]
+            )
+        ),
         f"{name} does not match the validated source batches.",
     )
     tables[name] = frame
@@ -83,13 +88,21 @@ gold_schedule = schedule.groupBy("campus_key", "education_stage", "department_ke
     F.countDistinct("class_section_key").alias("planned_class_section_count"),
     F.countDistinct("teacher_key").alias("planned_teacher_count"),
     F.sum("planned_subject_student_count").alias("planned_subject_enrollment_slots"),
+    F.sum(F.when(F.col("is_capacity_exceeded"), 1).otherwise(0)).alias("planned_capacity_exceedance_count"),
 )
 gold_incidents = incidents.groupBy("campus_key", "incident_status", "category").agg(
     F.count("*").alias("observed_incident_count"),
 )
+gold_closure_impacts = tables["planned_room_closure_impact"].groupBy(
+    "campus_key", "department_key", "education_stage", "closure_date"
+).agg(
+    F.count("*").alias("planned_affected_assignment_count"),
+    F.countDistinct("closure_key").alias("planned_closure_count"),
+)
 outputs = {
     "gold_planned_timetable_by_campus_day": gold_schedule,
     "gold_facility_incidents_by_campus": gold_incidents,
+    "gold_planned_closure_impacts": gold_closure_impacts,
 }
 totals = {
     "planned_weekly_assignment_count": gold_schedule.agg(
@@ -101,12 +114,18 @@ totals = {
     "observed_incident_count": gold_incidents.agg(
         F.sum("observed_incident_count").alias("value")
     ).first()["value"],
+    "planned_capacity_exceedance_count": gold_schedule.agg(
+        F.sum("planned_capacity_exceedance_count").alias("value")
+    ).first()["value"],
+    "planned_affected_assignment_count": tables["planned_room_closure_impact"].count(),
 }
 require(
     totals == {
         "planned_weekly_assignment_count": 2485,
         "planned_subject_enrollment_slots": 43550,
         "observed_incident_count": 20,
+        "planned_capacity_exceedance_count": source_counts["planned_capacity_exceedances"],
+        "planned_affected_assignment_count": source_counts["planned_room_closure_impact"],
     },
     f"Gold enrichment totals differ from the validated snapshot: {totals}.",
 )
@@ -118,4 +137,4 @@ for name, frame in outputs.items():
         .saveAsTable(f"{gold_lakehouse_name}.dbo.{name}")
     )
 write_manifest("Validated", totals)
-print("Validated planned timetable and observed-incident products; PostgreSQL remains pending.")
+print("Validated planned timetable and closure impacts and observed-incident products.")

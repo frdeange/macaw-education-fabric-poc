@@ -1,8 +1,8 @@
 # %% [markdown]
-# # Bronze to Silver: planned timetables and facilities incidents
+# # Bronze to Silver: planned timetables and facilities
 #
 # Conform the landed CSV batch and the Cosmos mirror with the validated SQL
-# snapshot. PostgreSQL room capacity and closures are not yet integrated.
+# snapshot and PostgreSQL rooms and planned closures.
 
 # %% [parameters]
 bronze_lakehouse_name = "__BRONZE_LAKEHOUSE_NAME__"
@@ -10,11 +10,6 @@ silver_lakehouse_name = "__SILVER_LAKEHOUSE_NAME__"
 expected_snapshot_date = "2026-11-20"
 timetable_batch_id = "timetable-2026-2027-v2"
 incident_batch_id = "facilities-incidents-2026-2027-v1"
-
-# %%
-raise RuntimeError(
-    "Draft notebook: verify and integrate the PostgreSQL rooms and closures mirror before execution."
-)
 
 # %%
 import json
@@ -64,7 +59,8 @@ def write_manifest(status, totals):
     manifest = spark.createDataFrame(
         [(
             sql_batch_id, expected_snapshot_date, timetable_batch_id,
-            incident_batch_id, status, "Pending", json.dumps(totals, sort_keys=True),
+            incident_batch_id, status, "Validated" if status == "Validated" else "Staging",
+            json.dumps(totals, sort_keys=True),
         )],
         [
             "SourceSqlBatchId", "SourceSnapshotDate", "TimetableBatchId",
@@ -229,6 +225,108 @@ require(
     "The timetable assignment enrollment total does not match the SQL snapshot.",
 )
 
+# %%
+rooms = spark.read.format("delta").load("Tables/PostGre/facility_room").select(
+    "room_key", "campus_key", "room_code", "room_type", "capacity"
+).cache()
+closures = spark.read.format("delta").load("Tables/PostGre/facility_closure").select(
+    "closure_key", "campus_key", "room_code", "closure_date",
+    "closure_reason", "status", "source_version",
+).cache()
+require(rooms.count() == 300 and closures.count() == 10, "Unexpected PostgreSQL mirror counts.")
+require(
+    rooms.where(
+        F.col("room_key").isNull() | F.col("campus_key").isNull()
+        | ~F.col("campus_key").between(1, 5) | F.col("room_code").isNull()
+        | (F.length(F.trim("room_code")) == 0) | F.col("room_type").isNull()
+        | ~F.col("room_type").isin("Classroom", "ScienceLab", "ArtStudio")
+        | F.col("capacity").isNull() | (F.col("capacity") <= 0)
+    ).limit(1).count() == 0,
+    "The PostgreSQL room mirror contains invalid values.",
+)
+assert_unique(rooms, ["room_key"], "Rooms")
+assert_unique(rooms, ["room_code"], "Rooms")
+assert_unique(rooms, ["campus_key", "room_code"], "Rooms")
+require(
+    closures.where(
+        F.col("closure_key").isNull() | F.col("campus_key").isNull()
+        | F.col("room_code").isNull() | F.col("closure_date").isNull()
+        | F.col("closure_reason").isNull() | (F.length(F.trim("closure_reason")) == 0)
+        | F.col("status").isNull() | (F.col("status") != "Planned")
+        | F.col("source_version").isNull() | (F.col("source_version") != timetable_batch_id)
+    ).limit(1).count() == 0,
+    "The PostgreSQL closure mirror contains invalid values or a different source version.",
+)
+assert_unique(closures, ["closure_key"], "Closures")
+assert_unique(closures, ["campus_key", "room_code", "closure_date"], "Closures")
+require(
+    closures.join(rooms.select("campus_key", "room_code"), ["campus_key", "room_code"], "left_anti")
+    .limit(1).count() == 0,
+    "A planned closure does not match a room at the same campus.",
+)
+planned_schedule = planned_schedule.join(
+    rooms.select("campus_key", "room_code", "room_key", "room_type", "capacity"),
+    ["campus_key", "room_code"], "left",
+)
+require(
+    planned_schedule.where(F.col("room_key").isNull()).limit(1).count() == 0,
+    "A planned assignment does not match a room at the same campus.",
+)
+planned_schedule = planned_schedule.withColumn(
+    "is_capacity_exceeded", F.col("planned_subject_student_count") > F.col("capacity")
+).cache()
+
+calendar = (
+    spark.read.format("delta").load("Tables/sql/SchoolCalendar")
+    .join(spark.read.format("delta").load("Tables/sql/DateDimension"), "DateKey")
+    .select(
+        F.col("CampusKey").alias("campus_key"),
+        F.col("CalendarDate").alias("closure_date"),
+        F.col("IsInstructionDay").alias("is_instruction_day"),
+    )
+)
+assert_unique(calendar, ["campus_key", "closure_date"], "School calendar")
+closures = closures.join(calendar, ["campus_key", "closure_date"], "left")
+require(
+    closures.where(F.col("is_instruction_day").isNull()).limit(1).count() == 0,
+    "A planned closure date is missing from the campus school calendar.",
+)
+schedule_day_number = (
+    F.when(F.col("s.day_of_week") == "Monday", 2)
+    .when(F.col("s.day_of_week") == "Tuesday", 3)
+    .when(F.col("s.day_of_week") == "Wednesday", 4)
+    .when(F.col("s.day_of_week") == "Thursday", 5)
+    .when(F.col("s.day_of_week") == "Friday", 6)
+)
+closure_impacts = (
+    closures.alias("c").join(
+        planned_schedule.alias("s"),
+        (F.col("c.campus_key") == F.col("s.campus_key"))
+        & (F.col("c.room_code") == F.col("s.room_code"))
+        & (F.dayofweek(F.col("c.closure_date")) == schedule_day_number)
+        & F.col("c.closure_date").between(
+            F.col("s.effective_start_date"), F.col("s.effective_end_date")
+        )
+        & F.col("c.is_instruction_day"),
+        "inner",
+    )
+    .select(
+        F.col("c.closure_key").alias("closure_key"),
+        F.col("c.closure_date").alias("closure_date"),
+        F.col("s.campus_key").alias("campus_key"),
+        F.col("s.department_key").alias("department_key"),
+        F.col("s.education_stage").alias("education_stage"),
+        F.col("s.room_key").alias("room_key"),
+        F.col("s.schedule_id").alias("schedule_id"),
+        F.col("s.teaching_assignment_key").alias("teaching_assignment_key"),
+        F.col("s.class_section_key").alias("class_section_key"),
+        F.col("s.subject_key").alias("subject_key"),
+        F.col("s.period_number").alias("period_number"),
+        F.col("s.planned_subject_student_count").alias("planned_subject_student_count"),
+    ).cache()
+)
+assert_unique(closure_impacts, ["closure_key", "schedule_id"], "Planned closure impacts")
+
 holidays = holiday_raw.select(
     F.col("Region").alias("region"),
     F.col("SourceRegion").alias("source_region"),
@@ -255,6 +353,31 @@ require(
     "The holiday reference contains invalid dates, regions, or advisory flags.",
 )
 assert_unique(holidays, ["region", "holiday_name", "school_year"], "Holiday reference")
+campuses = spark.read.table(f"{silver_lakehouse_name}.dbo.dim_campus")
+assert_batch(campuses, sql_batch_id, "dim_campus")
+holiday_calendar_variances = (
+    holidays.alias("h")
+    .join(campuses.alias("c"), F.col("h.region") == F.col("c.holiday_region"))
+    .join(
+        calendar.alias("d"),
+        (F.col("c.campus_key") == F.col("d.campus_key"))
+        & F.col("d.closure_date").between(F.col("h.start_date"), F.col("h.end_date"))
+        & F.col("d.is_instruction_day"),
+    )
+    .select(
+        F.col("c.campus_key").alias("campus_key"),
+        F.col("h.region").alias("region"),
+        F.col("h.holiday_name").alias("holiday_name"),
+        F.col("h.school_year").alias("school_year"),
+        F.col("h.is_advisory").alias("is_advisory"),
+        F.col("d.closure_date").alias("calendar_date"),
+    )
+).cache()
+assert_unique(
+    holiday_calendar_variances,
+    ["campus_key", "holiday_name", "school_year", "calendar_date"],
+    "Holiday calendar variances",
+)
 
 # %%
 event_schema = T.ArrayType(T.StructType([
@@ -299,6 +422,11 @@ require(
     "Cosmos incidents have invalid identifiers, values, or observation dates.",
 )
 assert_unique(incidents, ["incident_id"], "Cosmos incidents")
+require(
+    incidents.join(rooms.select("campus_key", "room_code"), ["campus_key", "room_code"], "left_anti")
+    .limit(1).count() == 0,
+    "An incident does not match a room at the same campus.",
+)
 incident_events = incidents.select(
     "incident_id", F.posexplode("events").alias("event_index", "event")
 ).select(
@@ -375,6 +503,15 @@ def write_silver(name, frame, source_batch, source_path):
 write_silver("planned_timetable", planned_schedule, timetable_batch_id, timetable_path)
 write_silver("regional_holiday", holidays, timetable_batch_id, holiday_path)
 write_silver(
+    "holiday_calendar_variance", holiday_calendar_variances, timetable_batch_id, holiday_path,
+)
+write_silver("facility_room", rooms, timetable_batch_id, "Tables/PostGre/facility_room")
+write_silver("facility_closure", closures, timetable_batch_id, "Tables/PostGre/facility_closure")
+write_silver(
+    "planned_room_closure_impact", closure_impacts, timetable_batch_id,
+    "Tables/PostGre/facility_closure",
+)
+write_silver(
     "facility_incident",
     incidents.drop(
         "_raw_campus_key", "events", "first_event_date", "last_event_date",
@@ -390,5 +527,9 @@ write_silver(
 write_manifest("Validated", {
     "planned_timetable": 2485, "regional_holiday": 21,
     "facility_incident": 20, "facility_incident_event": 40,
+    "facility_room": 300, "facility_closure": 10,
+    "planned_room_closure_impact": closure_impacts.count(),
+    "planned_capacity_exceedances": planned_schedule.where("is_capacity_exceeded").count(),
+    "holiday_calendar_variance": holiday_calendar_variances.count(),
 })
-print("Validated SQL, CSV, and Cosmos enrichment; PostgreSQL facilities remain pending.")
+print("Validated SQL, CSV, Cosmos, and PostgreSQL enrichment for the selected snapshot.")

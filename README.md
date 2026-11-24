@@ -54,15 +54,20 @@ rooms and 10 closures. A live Bronze SQL analytics endpoint query returned all
 three schemas: `sql` (27 tables), `CosmosDB` (one table) and `PostGre` (two
 tables).
 
-The SQL-mirror-only Bronze-to-Silver-to-Gold notebook slice and sequential
-`Macaw Education Medallion` pipeline are deployed. After correcting an
-attendance-count contract, a run completed and its Silver and Gold products
-and validated manifests were checked through their SQL analytics endpoints.
-That run preceded the schema-shortcut migration; the adapted notebook
-definitions have not been rerun. The pipeline has no schedule or external
-failure-notification connection. An interrupted enrichment run left partial
-Silver tables and a `Staging` manifest, not validated products. The draft
-enrichment notebooks remain blocked until PostgreSQL is integrated.
+The SQL-mirror slice was rerun successfully after the schema-shortcut
+migration; its Silver and Gold manifests and totals were checked through the
+SQL analytics endpoints. Separate enrichment notebook runs have also
+validated the four sources in Silver and Gold. They produced 2,485 planned
+weekly assignments, 300 rooms, 10 planned closures, 20 observed incidents,
+and 17 planned assignment/closure overlaps, with no capacity exceedances.
+The 20 instructional dates within the advisory May holiday extension are
+recorded without changing the school calendar. These overlaps are plans, not
+observed lessons or incidents.
+
+The four-stage `Macaw Education Medallion` pipeline definition has been
+deployed and read back. It has no schedule or external failure-notification
+connection. Validation is under an administrator identity and is not an
+access control.
 See the [medallion design](./docs/medallion-architecture.md) for source,
 security and validation requirements.
 
@@ -108,7 +113,7 @@ counts across subjects or departments can overlap.
 | Semantic model | Direct Lake model deployed and checked against SQL using an administrator identity. Its row-level security is **not validated**. Name fields are intentionally not in the published model. |
 | Data Agents | Both agents are published but unshared. Administrator smoke tests returned 960 Dutch students per campus and 87,100 assessment results; individual-subject attendance was correctly declined. These tests do not establish general reliability or restricted-user isolation. |
 | Foundry | A prompt agent with two delegated Fabric IQ connections was deployed and smoke-tested as an administrator. Version 1 predates the subject-enrollment instruction update; restricted-user access is unverified. |
-| Medallion architecture | Three schema-enabled Lakehouses and the owner-created SQL, Cosmos and PostgreSQL Bronze schema shortcuts exist. The SQL-only pipeline and its Silver/Gold manifests were validated before the shortcut migration, not rerun afterward. The immutable `timetable-2026-2027-v2` files remain in Bronze. The interrupted enrichment staging tables are not validated products; both enrichment notebooks remain blocked until PostgreSQL is integrated. Restricted-user security is unverified. |
+| Medallion architecture | Three schema-enabled Lakehouses and the owner-created SQL, Cosmos and PostgreSQL Bronze schema shortcuts exist. The SQL pipeline was rerun after the shortcut migration, and separate four-source enrichment runs produced validated Silver and Gold manifests. The four-stage pipeline definition was deployed and read back. Restricted-user security is unverified. |
 | Cosmos DB incidents | The synthetic container holds 20 incidents and 40 history events. All documents were compared with the OneLake mirror; an administrator Spark read through the Bronze schema shortcut returned 20 incidents. Restricted-user access remains unverified. |
 | PostgreSQL facilities | The fallback server contains 300 synthetic rooms and 10 planned closures. Its Fabric mirror reports both tables replicating, and its SQL endpoint rows match the validated seed. Administrator Spark reads through the Bronze schema shortcut returned 300 and 10 rows. Public access is enabled with an Azure-services firewall rule, Entra authentication and passwords disabled. Persistent table selection and restricted-user security remain unverified. The server incurs compute and storage costs. |
 | GraphQL | Planned only; no API, generated schema, or security validation has been completed. |
@@ -136,7 +141,7 @@ bypass tests remain outstanding.
 | `postgres/` | PostgreSQL facilities schema and post-seed validation scripts, applied and checked against the Azure source. |
 | `semantic-model/` | Parameterized TMDL definition and proposed, unvalidated security role. |
 | `fabric/` | Data Agent and Foundry instructions, test questions, SQL Bronze table contract, and the Medallion pipeline definition. |
-| `notebooks/` | Cell-marked Python sources for the SQL-mirror slice and blocked enrichment drafts. |
+| `notebooks/` | Cell-marked Python sources for the SQL-mirror slice and four-source enrichment. |
 | `scripts/` | PowerShell deployment helpers and Python notebook-authoring and Foundry tooling. |
 | `tests/` | Local tests for notebook and pipeline contracts, Foundry helpers, and Lakehouse provisioning. |
 | `docs/medallion-architecture.md` | Target data flow, agent-ready models and security gates. |
@@ -460,11 +465,13 @@ pipeline identity access, or restricted-user permissions.
 .\tests\test_cosmos_bronze_shortcut.ps1
 ```
 
-`scripts/deploy-medallion-notebooks.ps1` deploys the two version-controlled
-notebook definitions, binding Bronze-to-Silver to the Bronze Lakehouse and
-Silver-to-Gold to Silver. It verifies the active-capacity workspace and only
-updates notebooks with the expected project descriptions. It does not execute
-Spark, materialize tables, or grant permissions.
+`scripts/deploy-medallion-notebooks.ps1` deploys the two SQL notebook
+definitions, or the two enrichment definitions with `-OnlyEnrichment`, binding
+Bronze-to-Silver to the Bronze Lakehouse and Silver-to-Gold to Silver. It
+verifies the active-capacity workspace and only updates notebooks with the
+expected project descriptions. Inspect existing notebook metadata before using
+it to update a definition. It does not execute Spark, materialize tables, or
+grant permissions.
 
 ```powershell
 .\scripts\deploy-medallion-notebooks.ps1 -SubscriptionId $SubscriptionId `

@@ -126,12 +126,11 @@ sensitive characteristics from names or create real contact details.
   unavailable. Gold-backed models will serve the two
   Data Agents and Foundry. See `docs/medallion-architecture.md`. The three
   Lakehouses and SQL endpoints exist; Bronze has owner-created schema shortcuts
-  for the SQL, Cosmos and PostgreSQL mirrors. The SQL-only pipeline
-  materialized and validated Silver and Gold products before the shortcut
-  migration; its adapted notebook has not been rerun. Raw timetable and
-  holiday files remain in Bronze. Enrichment was interrupted; its partial
-  Silver tables have a `Staging` manifest and are not validated products.
-  Restricted-user access remains unverified.
+  for the SQL, Cosmos and PostgreSQL mirrors. The SQL-only pipeline was rerun
+  and validated after the shortcut migration. Separate four-source
+  enrichment notebook runs produced validated Silver and Gold manifests.
+  Raw timetable and holiday files remain in Bronze. Restricted-user access
+  remains unverified.
 - Design the semantic model around clear facts, dimensions, relationships,
   measures, and documented denominators. Prefer the mirrored OneLake data and
   validate the supported storage mode and security behaviour in the target
@@ -201,9 +200,9 @@ sensitive characteristics from names or create real contact details.
   `MacawEducationSilver` and `MacawEducationGold`, have been created in the
   project workspace. `Macaw Bronze to Silver` and `Macaw Silver to Gold`
   notebook definitions were deployed and bound to the Bronze and Silver
-  Lakehouses. The `Macaw Education Medallion` DataPipeline definition was
-  deployed and read back; its four activities, ordered dependency and
-  pipeline parameters were confirmed. The first run failed twice in
+  Lakehouses. The initial SQL-only `Macaw Education Medallion` pipeline
+  definition was deployed and read back with its four activities and
+  parameters. The first run failed twice in
   Bronze-to-Silver because the 315,842 Present-or-Late attendance numerator
   was mistakenly used as the expected total record count. The corrected
   count is 336,000 observed instructional student-days through the snapshot
@@ -212,8 +211,9 @@ sensitive characteristics from names or create real contact details.
   87,100, plus validated Silver and Gold manifests. Gold aggregate totals
   are 5,600 enrollment learners, 5,600 class-size learners, 43,550 subject
   enrollments, 336,000 attendance records and 87,100 assessment results.
-  The Present-or-Late numerator remains 315,842. This validated run preceded
-  the schema-shortcut migration; the adapted notebook has not been rerun.
+  The Present-or-Late numerator remains 315,842. The SQL-only pipeline was
+  rerun after the schema-shortcut migration and the manifests and Silver
+  counts were validated again.
   No pipeline schedule, external failure-notification connection or
   permissions were configured. HorizonDB and Gold-backed models remain
   planned; restricted-user access to the Lakehouses and their endpoints is
@@ -238,15 +238,18 @@ sensitive characteristics from names or create real contact details.
   were `Active`. These checks do not prove row-level equality, a consistent
   cross-table snapshot or mirror freshness. No SQL Bronze Delta materialization
   has run.
-- The `Macaw Bronze to Silver` and `Macaw Bronze Enrichment to Silver`
-  definitions were updated to use the schema paths; the enrichment notebook
-  remains explicitly blocked. Neither notebook was run after the migration.
+- All four SQL and enrichment notebook definitions use the schema paths.
+  The four-stage pipeline definition and its failure paths were deployed and
+  read back; the two enrichment notebooks were separately run and validated.
 - A point-in-time workspace role inventory and the Bronze Lakehouse and SQL
   endpoint item-access inventories each listed only the signed-in workspace
   administrator. Bronze and the PostgreSQL mirror each had only a
   `DefaultReader` OneLake role granting `ReadAll` holders access to all paths.
   These observations do not establish a campus/department policy, effective
   restricted-user isolation or the SQL endpoint's access mode.
+  A later workspace role inventory again showed one administrator assignment;
+  Azure CLI listed one user identity for the project tenant. Neither inventory
+  proves effective item access or supplies restricted-user credentials.
 - The reproducible synthetic timetable and holiday batch
   `timetable-2026-2027-v2` is present in immutable Bronze landing paths. The
   uploaded files contain 2,485 planned weekly assignments, 21 official
@@ -254,10 +257,7 @@ sensitive characteristics from names or create real contact details.
   An earlier immutable `v1` batch with 18 holiday rows remains in Bronze and
   is superseded; use only the `v2` paths. A read-only SQL analytics endpoint
   comparison reconstructed 2,485 source teaching assignments with zero
-  mismatched keys, sections, subjects, or teachers. An enrichment run was
-  started before the documented PostgreSQL prerequisite, then cancellation
-  was requested. Its partial Silver timetable and holiday tables must not be
-  used as validated outputs.
+  mismatched keys, sections, subjects, or teachers.
 - The holiday reference includes 2025-2026 summer dates to check the start of
   the 2026-2027 snapshot. A SQL analytics endpoint comparison found 20 dates
   marked instructional during the optional 2027 May holiday extension (four
@@ -313,8 +313,8 @@ sensitive characteristics from names or create real contact details.
   CDC, but does not verify the Fabric connection, replication, freshness or
   downstream isolation.
   The mirrored school calendar marks both planned closure dates instructional
-  for all five campuses; the 17 local schedule overlaps remain plans, not
-  observed events or validated Gold results.
+  for all five campuses; the 17 schedule overlaps are plans, not observed
+  lessons or incidents.
 - The PostgreSQL mirror was created through the portal using an encrypted
   organizational-account cloud connection without a gateway. The two
   facilities tables were selected with automatic mirroring of future tables
@@ -337,13 +337,15 @@ sensitive characteristics from names or create real contact details.
   and the Bronze shortcut to the Cosmos mirror was verified. Events are
   observed only through the snapshot date. Shared room identifiers do not
   prove that an incident caused a planned PostgreSQL closure.
-- The enrichment notebook job was cancelled after it had started, but Fabric
-  reported `Completed`; a direct Delta readback found a `Staging` manifest,
-  2,485 timetable rows, 21 holiday rows and 20 incident rows. The event table
-  was absent. No enrichment Gold notebook was run. Both enrichment notebook
-  definitions now raise an explicit error before writing until the verified
-  PostgreSQL mirror has been integrated. Do not consume the partial tables or
-  interpret the job's completion status as validation.
+- An earlier interrupted enrichment run reported `Completed` despite a
+  `Staging` manifest and incomplete tables. A later four-source Silver run
+  replaced those partial tables: after SQL metadata refresh, its validated
+  manifest and endpoint counts showed 2,485 planned assignments, 21 holiday
+  rows, 300 rooms, 10 planned closures, 20 incidents and 40 events. It found
+  17 planned closure/assignment overlaps, no capacity exceedances and 20
+  advisory holiday-calendar variances. A separate Gold run and SQL readback
+  confirmed matching totals. This administrator validation does not establish
+  source freshness or restricted-user security.
 - A documented Fabric REST API for `PostgreSQLDatabase` exists and lists zero
   items in the workspace, but its applicability to HorizonDB has not been
   confirmed. A successful list call does not prove that creation is enabled.
@@ -544,20 +546,14 @@ sensitive characteristics from names or create real contact details.
    the evaluator's threshold, trace inputs, temporal scope, and safety
    criteria. Register or verify any suite before claiming one exists. Run a
    batch evaluation only after the project owner approves it.
-7. Preserve the verified SQL-mirror notebook slice and prior pipeline run;
-   validate the adapted SQL notebook after the schema-shortcut migration,
-   configure an approved external failure notification if required, and
-   validate the landed timetable and holiday files against the mirror. Integrate
-   PostgreSQL into the enrichment notebooks before transforming those sources. Add
-   Gold-backed agent-ready models and delegated agent integration afterward.
-   Silver and Gold counts and manifests are validated as an administrator,
-   but restricted-user access remains unverified. Do not share a new surface
-   until its security tests pass.
-8. Validate pipeline identity access and the adapted notebooks after the
-   schema-shortcut migration. Determine whether the Cosmos and PostgreSQL
-   schemas are available through the Bronze SQL endpoint when required.
-   Confirm persistent PostgreSQL source selection and independent security;
-   account for the additional SQL tables and future schema additions.
+7. Preserve the validated SQL and four-source enrichment products; configure
+   an approved external failure notification if required. Add Gold-backed
+   agent-ready models and delegated agent integration only after independent
+   security validation. Do not share new surfaces until their tests pass.
+8. Confirm persistent PostgreSQL source selection, mirror freshness and
+   independent security; account for the additional SQL tables and future
+   schema additions. Administrator execution does not validate a separate
+   pipeline identity or restricted users.
 
 ## Suggested Prep data for AI review
 

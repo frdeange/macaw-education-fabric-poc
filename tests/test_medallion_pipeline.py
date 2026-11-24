@@ -30,6 +30,17 @@ class MedallionPipelineTests(unittest.TestCase):
             ],
         )
 
+    def test_enrichment_waits_for_validated_base_and_runs_in_order(self):
+        for name, previous in (
+            ("BronzeEnrichmentToSilver", "SilverToGold"),
+            ("SilverEnrichmentToGold", "BronzeEnrichmentToSilver"),
+        ):
+            with self.subTest(activity=name):
+                self.assertEqual(
+                    self.activities[name]["dependsOn"],
+                    [{"activity": previous, "dependencyConditions": ["Succeeded"]}],
+                )
+
     def test_silver_receives_pipeline_snapshot_and_batch_parameters(self):
         silver = self.activities["BronzeToSilver"]["typeProperties"]["parameters"]
         parameters = self.definition["parameters"]
@@ -44,11 +55,18 @@ class MedallionPipelineTests(unittest.TestCase):
                 silver[name]["value"]["value"], f"@pipeline().parameters.{name}"
             )
             self.assertEqual(silver[name]["value"]["type"], "Expression")
+        enrichment = self.activities["BronzeEnrichmentToSilver"]["typeProperties"]["parameters"]
+        self.assertEqual(
+            enrichment["expected_snapshot_date"]["value"],
+            {"value": "@pipeline().parameters.expected_snapshot_date", "type": "Expression"},
+        )
 
     def test_fail_activities_surface_each_notebook_failure(self):
         expected = {
             "FailAfterBronzeToSilver": "BronzeToSilver",
             "FailAfterSilverToGold": "SilverToGold",
+            "FailAfterBronzeEnrichmentToSilver": "BronzeEnrichmentToSilver",
+            "FailAfterSilverEnrichmentToGold": "SilverEnrichmentToGold",
         }
         for fail_name, upstream in expected.items():
             with self.subTest(activity=fail_name):
@@ -60,7 +78,10 @@ class MedallionPipelineTests(unittest.TestCase):
                 )
 
     def test_notebook_activities_are_sequential_and_retryable(self):
-        for name in ("BronzeToSilver", "SilverToGold"):
+        for name in (
+            "BronzeToSilver", "SilverToGold",
+            "BronzeEnrichmentToSilver", "SilverEnrichmentToGold",
+        ):
             with self.subTest(activity=name):
                 activity = self.activities[name]
                 self.assertEqual(activity["type"], "TridentNotebook")
