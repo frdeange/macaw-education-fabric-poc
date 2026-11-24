@@ -214,10 +214,13 @@ sensitive characteristics from names or create real contact details.
   one retest correctly declined after instructions changed, but a department
   student-day question was incorrectly rejected as unsupported, even after
   stale Data Agent element descriptions were corrected and republished. A
-  Power BI schema response still showed old aggregate metadata after the
-  model update; its cause is unconfirmed. Do not treat the agents as reliable or connect
-  them to Foundry until investigated and retested. Prep data for AI and
-  restricted-user security remain open.
+  later Power BI schema read showed the detailed model, and two subsequent
+  Science and Technology student-day questions returned 255,000; a Dutch
+  lesson attendance question was correctly declined. The cause of the earlier
+  aggregate schema response is unknown. These tests do not establish general
+  reliability. Do not connect the agents to Foundry until representative tests
+  and relevant security gates pass. Prep data for AI and restricted-user
+  security remain open.
 - Three schema-enabled Lakehouses, `MacawEducationBronze`,
   `MacawEducationSilver` and `MacawEducationGold`, have been created in the
   project workspace. `Macaw Bronze to Silver` and `Macaw Silver to Gold`

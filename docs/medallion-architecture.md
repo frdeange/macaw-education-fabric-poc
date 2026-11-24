@@ -327,11 +327,16 @@ question, but a separate department student-day question incorrectly claimed
 the data was unavailable. Published agent element descriptions still
 contained old aggregate-only descriptions; these were corrected and verified
 after republication, but the department question was still incorrectly
-rejected. A Power BI schema response also continued to show old aggregate
-metadata after the model update; the cause is unconfirmed.
-Do not treat the agents as reliable or connect them to Foundry until these
-behaviors are investigated and representative tests pass. Prep data for AI
-configuration and restricted-user security remain unverified.
+rejected. A Power BI schema response initially continued to show old aggregate
+metadata after the model update. A later schema read returned the detailed
+operations tables and measures; the cause of the earlier response is unknown.
+In subsequent administrator MCP tests, two phrasings for Science and
+Technology students returned the expected 255,000 observed student-days, and
+a Dutch lesson attendance question was correctly declined. These are isolated
+examples, not proof of general reliability or security. Do not connect the
+agents to Foundry until representative testing and the relevant security
+gates pass. Prep data for AI configuration and restricted-user security remain
+unverified.
 
 Snapshot-specific count checks and asynchronous source mirrors are not a
 general freshness guarantee.
