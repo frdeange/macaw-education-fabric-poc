@@ -227,6 +227,25 @@ sensitive characteristics from names or create real contact details.
   These checks do not prove row-level equality, a consistent cross-table
   snapshot or mirror freshness. The operational SQL mirror remains accessed
   through shortcuts; no Bronze Delta materialization has run.
+- The owner requested replacing the SQL and Cosmos `Files` shortcuts with
+  schema shortcuts and including the PostgreSQL mirror; CSVs remain files.
+  This migration is not deployed. A read-only inventory found 27 folders in
+  the SQL mirror's `dbo` schema: all 20 reviewed tables plus six `Analytics*`
+  tables and `SecurityAccessGrant`. A shortcut to the whole schema, if
+  supported for this mirror, would broaden the reviewed selection. The Cosmos
+  mirror folder contains one table and the PostgreSQL mirror folder two;
+  persistent PostgreSQL table selection remains unconfirmed. Direct schema
+  shortcut compatibility with these mirrors has not been verified.
+  The existing SQL and Cosmos `Files` shortcuts passed administrator
+  verify-only checks; the SQL notebook still reads the SQL paths. Do not
+  remove them before compatible replacements and dependent notebooks are
+  validated.
+- A point-in-time workspace role inventory and the Bronze Lakehouse and SQL
+  endpoint item-access inventories each listed only the signed-in workspace
+  administrator. Bronze and the PostgreSQL mirror each had only a
+  `DefaultReader` OneLake role granting `ReadAll` holders access to all paths.
+  These observations do not establish a campus/department policy, effective
+  restricted-user isolation or the SQL endpoint's access mode.
 - The reproducible synthetic timetable and holiday batch
   `timetable-2026-2027-v2` is present in immutable Bronze landing paths. The
   uploaded files contain 2,485 planned weekly assignments, 21 official
@@ -534,6 +553,11 @@ sensitive characteristics from names or create real contact details.
    Silver and Gold counts and manifests are validated as an administrator,
    but restricted-user access remains unverified. Do not share a new surface
    until its security tests pass.
+8. Resolve the requested schema-shortcut migration without silently expanding
+   the 20-table SQL contract or substituting table shortcuts for the requested
+   schema shortcuts. Confirm source compatibility, persistent source selection,
+   independent security and pipeline access. Update and validate dependent
+   notebooks before removing the exact old shortcuts; preserve raw CSV files.
 
 ## Suggested Prep data for AI review
 

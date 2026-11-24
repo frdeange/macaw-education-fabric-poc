@@ -66,6 +66,13 @@ notebooks are blocked until the PostgreSQL mirror is integrated.
 See the [medallion design](./docs/medallion-architecture.md) for source,
 security and validation requirements.
 
+The requested migration from the existing SQL and Cosmos `Files` shortcuts to
+schema shortcuts, including PostgreSQL, has not been deployed. The SQL mirror
+schema contains seven tables outside the reviewed 20-table Bronze contract, so
+a shortcut to the whole schema would broaden that selection. Keep the existing
+shortcuts and CSV files in place until the selection, security, and notebook
+dependencies are resolved and replacement paths are validated.
+
 ## Scenario
 
 - Five fictional campuses, each with a primary and a secondary school unit.
@@ -104,7 +111,7 @@ counts across subjects or departments can overlap.
 | Foundry | A prompt agent with two delegated Fabric IQ connections was deployed and smoke-tested as an administrator. Version 1 predates the subject-enrollment instruction update; restricted-user access is unverified. |
 | Medallion architecture | Three schema-enabled Lakehouses are deployed. The SQL-only pipeline and its Silver/Gold manifests were validated as an administrator. Bronze also contains immutable `timetable-2026-2027-v2` files and a checked Cosmos mirror shortcut. An interrupted enrichment run left 2,485 timetable, 21 holiday and 20 incident rows in partial Silver tables with a `Staging` manifest; the event table and enrichment Gold products are absent. Both deployed draft notebooks explicitly fail until the PostgreSQL mirror is integrated. These staging tables are not validated or safe to share. |
 | Cosmos DB incidents | The synthetic container holds 20 incidents and 40 history events. All documents were compared with the OneLake mirror, and the Bronze shortcut was verified. Restricted-user access remains unverified. |
-| PostgreSQL facilities | The fallback server contains 300 synthetic rooms and 10 planned closures. Public access is enabled with an Azure-services firewall rule, Entra authentication and passwords disabled. No Fabric mirror exists yet. The server incurs compute and storage costs. |
+| PostgreSQL facilities | The fallback server contains 300 synthetic rooms and 10 planned closures. Its Fabric mirror reports both tables replicating, and its SQL endpoint rows match the validated seed. Public access is enabled with an Azure-services firewall rule, Entra authentication and passwords disabled. No Bronze shortcut is deployed; restricted-user security is unverified. The server incurs compute and storage costs. |
 | GraphQL | Planned only; no API, generated schema, or security validation has been completed. |
 | Evaluation | Generated questions and a custom evaluator are unreviewed drafts. No batch evaluation or remote evaluation suite has been verified. |
 
@@ -127,7 +134,7 @@ bypass tests remain outstanding.
 | --- | --- |
 | `sql/` | Operational schema, deterministic seed and names, analytical snapshots, migration, and validation queries. |
 | `data/sources/` | Deterministic timetable, regional holiday, PostgreSQL facilities and Cosmos incident source files with checksums. |
-| `postgres/` | PostgreSQL facilities schema and post-seed validation scripts; not yet executed. |
+| `postgres/` | PostgreSQL facilities schema and post-seed validation scripts, applied and checked against the Azure source. |
 | `semantic-model/` | Parameterized TMDL definition and proposed, unvalidated security role. |
 | `fabric/` | Data Agent and Foundry instructions, test questions, SQL Bronze table contract, and the Medallion pipeline definition. |
 | `notebooks/` | Cell-marked Python sources for the SQL-mirror slice and blocked enrichment drafts. |

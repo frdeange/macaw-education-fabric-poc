@@ -124,6 +124,41 @@ directories, and does not overwrite existing paths. These checks do not prove
 that a separately configured pipeline identity can use the shortcuts, nor
 that the mirror is complete or current. No access grants were made.
 
+### Requested schema-shortcut migration
+
+The owner requested schema shortcuts for the SQL, Cosmos and PostgreSQL
+mirrors instead of the existing shortcuts under `Files`; the raw CSV files
+remain files. No schema shortcut has been deployed for this migration.
+[Lakehouse schema shortcuts](https://learn.microsoft.com/en-us/fabric/data-engineering/lakehouse-schemas#bring-multiple-tables-with-schema-shortcut)
+reference all tables in the selected source schema; the documented
+[OneLake shortcut API](https://learn.microsoft.com/en-us/rest/api/fabric/core/onelake-shortcuts/create-shortcut)
+does not specify a table allowlist for a schema target.
+
+The SQL mirror's `dbo` folder currently contains all 20 reviewed tables and
+seven excluded tables: six `Analytics*` snapshots and `SecurityAccessGrant`.
+A whole-schema shortcut would therefore broaden the reviewed selection if
+Fabric accepts that mirror as a schema-shortcut source. The Cosmos folder
+currently contains one incident table and the PostgreSQL `_public` folder
+contains the two facilities tables. Their eligibility as direct
+schema-shortcut sources has not been tested. Source changes can also affect
+what a schema shortcut exposes, and the PostgreSQL mirror's persistent
+selection remains unconfirmed.
+
+The existing 20 SQL shortcuts and one Cosmos shortcut passed read-only
+administrator verification. The three immutable timetable, holiday and
+manifest files also passed read-only checksum verification. The deployed SQL
+notebook still reads the `Files/sql_mirror/` paths. Preserve these shortcuts
+until replacements and notebook changes have been validated; do not remove or
+alter source tables or the raw timetable and holiday files.
+
+A point-in-time workspace role inventory and the Bronze Lakehouse and SQL
+endpoint item-access inventories each listed only the signed-in administrator.
+Bronze and the PostgreSQL mirror each had only a `DefaultReader` OneLake role
+with all-path access for `ReadAll` holders. These observations do not prove
+restricted-user isolation or the SQL endpoint's access mode. Separately
+configure and test the required controls before exposing a new path; retain
+the PostgreSQL deployment block until its documented gates pass.
+
 An administrator compared counts for all 20 operational source tables with
 the SQL analytics endpoint; they matched, including 5,600 students, 240
 teachers, 280 sections, 336,000 student-day records, 87,100 assessment results
