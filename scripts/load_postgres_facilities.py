@@ -1,4 +1,4 @@
-"""Initialize or verify the synthetic facilities source on private Azure PostgreSQL."""
+"""Initialize or verify the synthetic facilities source on Azure PostgreSQL."""
 
 from __future__ import annotations
 
@@ -84,12 +84,15 @@ def postgres_database_name(value: str) -> str:
     return value
 
 
-def private_address(host: str) -> str:
+def resolve_address(host: str, *, allow_public: bool = False) -> str:
     addresses = {
         ipaddress.ip_address(result[4][0])
         for result in socket.getaddrinfo(host, 5432, family=socket.AF_INET, type=socket.SOCK_STREAM)
     }
-    if not addresses or any(
+    if allow_public:
+        if not addresses or any(not address.is_global for address in addresses):
+            raise RuntimeError("The PostgreSQL hostname must resolve exclusively to public IPv4 addresses.")
+    elif not addresses or any(
         not any(address in network for network in PRIVATE_NETWORKS) for address in addresses
     ):
         raise RuntimeError("The PostgreSQL hostname must resolve exclusively to private IPv4 addresses.")
@@ -250,6 +253,7 @@ def main() -> None:
     parser.add_argument("--server", required=True, type=azure_postgres_host)
     parser.add_argument("--database-name", required=True, type=postgres_database_name)
     parser.add_argument("--ca-bundle", required=True, type=Path)
+    parser.add_argument("--allow-public", action="store_true")
     parser.add_argument("--verify-only", action="store_true")
     parser.add_argument("--check-mirroring-readiness", action="store_true")
     args = parser.parse_args()
@@ -263,7 +267,7 @@ def main() -> None:
         parser.error("The PostgreSQL trusted root CA bundle must be an existing PEM file.")
 
     verify_local_sources()
-    address = private_address(args.server)
+    address = resolve_address(args.server, allow_public=args.allow_public)
     credential = TenantCheckedCredential(args.subscription_id, args.tenant_id)
     try:
         token = credential.get_token(POSTGRES_SCOPE).token

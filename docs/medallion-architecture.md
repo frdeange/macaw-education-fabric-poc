@@ -14,7 +14,8 @@ matched their local SHA-256 digests. Cosmos incident documents, their mirror
 and the Bronze shortcut have also been verified. An interrupted enrichment
 run left partial Silver tables with a `Staging` manifest, not validated
 products; no enrichment Gold notebook ran. PostgreSQL facilities have not
-been seeded or mirrored, and Gold-backed models have not been deployed.
+been mirrored, and Gold-backed models have not been deployed. PostgreSQL has
+been seeded and validated.
 Restricted-user access to the Lakehouses and their endpoints is unverified.
 
 ## Data flow
@@ -51,28 +52,22 @@ do not by themselves enforce a security boundary.
 The approved Azure PostgreSQL fallback was provisioned before HorizonDB
 availability was confirmed. The server is now Ready in Sweden Central on
 General Purpose D2ads v5 with 32 GiB of storage, Entra-only authentication,
-and public network access disabled. It incurs compute and storage charges.
+and public network access enabled. It incurs compute and storage charges.
 The prepared source schema enforces closure-to-room campus consistency, and
 its validator checks the source keys and foreign key. These have only been
-tested locally.
-The empty `macaw_facilities` database, a project-tenant Entra administrator
+tested against Azure PostgreSQL with 300 rooms and 10 planned closures.
+The `macaw_facilities` database, a project-tenant Entra administrator
 and a system-assigned managed identity exist; no Fabric permissions were
-granted to the identity. Connectivity, schema, seed and mirror remain
-unverified. The supported `fabric-mirroring start` command completed and
-readback showed mirroring enabled with `wal_level=logical`, but the reported
-extension allowlist and preload values do not show `azure_cdc`; its
-registration and readiness require verification. A VNet data gateway consumes
-4 CUs per active member and may contend with the shared F4 capacity; obtain
-approval before activating it. A Fabric managed private endpoint supports Spark
-connectivity but is not documented as a mirroring gateway. The documented
-NotebookUtils token audiences do not include PostgreSQL, so a supported private
-Entra-authenticated seeding route is still unverified.
+granted to the identity. The administrator's CDC prerequisites and both
+tables' eligibility passed. An Azure-services firewall rule permits connection
+attempts from all Azure subscriptions; Entra authentication remains required.
+The temporary client IP rule used for seeding was removed. The Fabric cloud
+connection, mirror and consumer security remain unverified.
 
 The current identity can see one VNet outside the project resource group,
 with no Power Platform-delegated subnet; its ownership and suitability are
-unverified. It can see no private endpoint targeting this PostgreSQL server,
-and local DNS returned no RFC 1918 IPv4 address. These point-in-time checks
-are permission-limited and do not establish that other paths do not exist.
+unverified. It could see no private endpoint targeting this PostgreSQL server.
+These point-in-time checks are permission-limited.
 Do not modify the existing VNet without approval.
 
 The source loader now includes the extension's pre-creation
@@ -86,7 +81,8 @@ security.
 [`POSTGRES_SHORTCUT_DEPLOYMENT_BLOCKED`](../fabric/POSTGRES_SHORTCUT_DEPLOYMENT_BLOCKED)
 prevents the included script from creating PostgreSQL shortcuts until the
 independent security and validation gates are met; it is not an access control.
-All new mirror checks have only been exercised against simulated responses.
+The mirror checks have only been exercised against simulated responses and
+currently require a VNet connection; adapt them before using a cloud connection.
 
 No separate scheduling application or DUO dataset is required. All pupil,
 teacher, timetable and facilities data are synthetic. Government holiday dates
@@ -314,18 +310,16 @@ not yet verified.
   a compatible General Purpose or Memory Optimized tier, network and
   replication prerequisites; Burstable is not supported for mirroring.
 - The [Azure PostgreSQL pipeline connector](https://learn.microsoft.com/en-us/fabric/data-factory/connector-azure-database-for-postgresql-overview)
-  documents Basic authentication for Script activity; the private-only
+  documents Basic authentication for Script activity; the
   fallback has password authentication disabled. The
   [mirroring tutorial](https://learn.microsoft.com/en-us/fabric/mirroring/azure-database-postgresql-tutorial)
   separately documents an organizational account and a VNet gateway. Fabric
   managed private endpoints support PostgreSQL for Spark workloads, but a
-  private Entra-authenticated seed route and managed-endpoint use for
-  mirroring have not been verified. Do not treat these as interchangeable.
+  managed-endpoint use for mirroring has not been verified.
 - `scripts/load_postgres_facilities.py` is a local, tenant-checked Entra
   loader with transactional creation and full snapshot comparison. It requires
-  preexisting private DNS/connectivity and TLS certificate verification; it
-  neither creates that route nor configures a mirror. Its use against the
-  Azure server remains unverified.
+  TLS certificate verification and, with `--allow-public`, a public IPv4
+  route. It loaded and verified the Azure source but does not configure a mirror.
 
 The staged `SecurityAccessGrant` records are configuration, not enforcement.
 The existing Data Agents remain unshared; Foundry project access has not been

@@ -56,8 +56,8 @@ through their SQL analytics endpoints. The pipeline has no schedule or
 external failure-notification connection. A reproducible timetable and
 regional holiday batch is landed in Bronze as immutable raw files. Cosmos
 contains 20 fictional incident documents and 40 history events; its mirror
-and Bronze shortcut were checked against the source. Azure PostgreSQL is
-running with an empty facilities database, but has no seeded tables or mirror.
+and Bronze shortcut were checked against the source. Azure PostgreSQL contains
+300 synthetic rooms and 10 planned closures; its mirror is not yet created.
 An interrupted enrichment run left partial Silver tables and a `Staging`
 manifest; those tables are not validated products. The draft enrichment
 notebooks are blocked until the PostgreSQL mirror is integrated.
@@ -102,7 +102,7 @@ counts across subjects or departments can overlap.
 | Foundry | A prompt agent with two delegated Fabric IQ connections was deployed and smoke-tested as an administrator. Version 1 predates the subject-enrollment instruction update; restricted-user access is unverified. |
 | Medallion architecture | Three schema-enabled Lakehouses are deployed. The SQL-only pipeline and its Silver/Gold manifests were validated as an administrator. Bronze also contains immutable `timetable-2026-2027-v2` files and a checked Cosmos mirror shortcut. An interrupted enrichment run left 2,485 timetable, 21 holiday and 20 incident rows in partial Silver tables with a `Staging` manifest; the event table and enrichment Gold products are absent. Both deployed draft notebooks explicitly fail until the PostgreSQL mirror is integrated. These staging tables are not validated or safe to share. |
 | Cosmos DB incidents | The synthetic container holds 20 incidents and 40 history events. All documents were compared with the OneLake mirror, and the Bronze shortcut was verified. Restricted-user access remains unverified. |
-| PostgreSQL facilities | The approved fallback server is running with public network access and password authentication disabled. An empty `macaw_facilities` database, an Entra administrator and a system-assigned identity exist; the 300-room/10-closure seed, private connectivity and mirroring remain pending. The server incurs compute and storage costs. |
+| PostgreSQL facilities | The fallback server contains 300 synthetic rooms and 10 planned closures. Public access is enabled with an Azure-services firewall rule, Entra authentication and passwords disabled. No Fabric mirror exists yet. The server incurs compute and storage costs. |
 | GraphQL | Planned only; no API, generated schema, or security validation has been completed. |
 | Evaluation | Generated questions and a custom evaluator are unreviewed drafts. No batch evaluation or remote evaluation suite has been verified. |
 
@@ -282,27 +282,15 @@ creation eligibility nor the API's applicability to HorizonDB is confirmed.
 No HorizonDB creation request was submitted.
 
 The approved Azure PostgreSQL fallback is running in Sweden Central on
-General Purpose D2ads v5 with 32 GiB of storage. Entra authentication is
-enabled, password authentication and public network access are disabled.
-The empty `macaw_facilities` database, a project-tenant Entra administrator and
-a system-assigned managed identity were created. No Fabric permissions were
-granted to that identity. The supported PostgreSQL mirroring preparation
-command completed; `azure.fabric_mirror_enabled` is `on` and `wal_level` is
-`logical`. The reported extension allowlist and preload values do not show
-`azure_cdc`, so its registration and readiness remain unverified. Private
-connectivity, schema, seed and the Fabric mirror remain pending. The running
-server incurs compute and storage costs. A VNet data
-gateway could use 4 capacity units per member while active, potentially
-competing with this shared F4 capacity; obtain approval before activating it.
-Do not create a new paid capacity or change shared workspace networking
-without the required approval.
-
-A read-only inventory visible to the current identity found one VNet outside
-the project resource group, with no Power Platform-delegated subnet. Its
-ownership and suitability are unverified; do not modify it without approval.
-No accessible private endpoint targeted the PostgreSQL server, and local DNS
-returned no RFC 1918 IPv4 address for it, so the loader cannot currently
-connect from this machine. These are permission-limited, point-in-time checks.
+General Purpose D2ads v5 with 32 GiB of storage. Entra authentication and
+public network access are enabled; password authentication is disabled. The
+Azure-services firewall rule allows connection attempts from Azure services
+in any subscription, not just this tenant. Authentication is still required.
+A temporary client IP rule used for loading was removed. The server incurs
+compute and storage costs. The source schema and 300 rooms and 10 closures
+were loaded and compared row by row with the synthetic generator. The source
+CDC prerequisite and table eligibility checks passed under the administrator;
+the Fabric connection, mirror, replication and security remain unverified.
 
 The [Fabric pipeline PostgreSQL connector](https://learn.microsoft.com/en-us/fabric/data-factory/connector-azure-database-for-postgresql-overview)
 documents Basic authentication for Script activity, whereas the
@@ -313,12 +301,8 @@ seed this Entra-only server. A
 can connect Spark workloads to PostgreSQL, but does not establish a mirroring
 connection. The documented
 [NotebookUtils token audiences](https://learn.microsoft.com/en-us/fabric/data-engineering/notebookutils/notebookutils-credentials#get-token)
-do not include PostgreSQL. A supported private Entra-authenticated seed route
-remains unverified.
-
-Once a supported private Entra-authenticated loading path is available, apply
-the source schema and seed, then wait for the asynchronous mirror and validate
-the analytics endpoint before adding facilities to Silver or Gold.
+do not include PostgreSQL. The public route avoids a VNet gateway; it does not
+establish that a Fabric connection or mirror is working.
 
 The local `scripts/load_postgres_facilities.py` prepares and validates the
 same deterministic rooms and closures in one database transaction. It refuses
@@ -329,14 +313,12 @@ holiday, room, closure, incident, manifest and SQL-seed files match their
 deterministic generators. This checks local files only, not current remote
 mirror freshness. It obtains an
 Entra token for the selected subscription and verifies its tenant, requires a
-trusted PostgreSQL CA bundle and `verify-full` TLS, and only connects when the
-canonical server hostname resolves exclusively to private RFC 1918 IPv4
-addresses. The loader does not establish private networking or configure
-mirroring. Transactional creation, rollback and read-only rechecking were
-validated locally with an embedded PostgreSQL engine; the loader has not been
-run against the Azure server.
+trusted PostgreSQL CA bundle and `verify-full` TLS. By default it requires
+private RFC 1918 IPv4 addresses; `--allow-public` explicitly selects globally
+routable IPv4 addresses instead. The loader does not configure networking or
+mirroring.
 
-After an approved private route and DNS are configured, set the PostgreSQL
+After an approved route and DNS are configured, set the PostgreSQL
 settings locally and temporarily set `PGUSER` to the Entra database
 administrator; do not save the user name or a token in project files:
 
@@ -346,7 +328,7 @@ $env:PGUSER = '<postgresql-entra-admin-user>'
 python .\scripts\load_postgres_facilities.py `
     --subscription-id $SubscriptionId --tenant-id $TenantId `
     --server $PostgresServer --database-name $PostgresDatabase `
-    --ca-bundle $PostgresCaBundle
+    --ca-bundle $PostgresCaBundle --allow-public --verify-only
 Remove-Item Env:\PGUSER
 ```
 
@@ -371,7 +353,7 @@ reports issues including identity configuration, worker limits, recovery mode,
 and publication limits. Missing or non-`OK` status fails explicitly. Once a
 publication exists, the publication limit can make this *pre-creation* check
 fail; use `--verify-only` without the readiness flag to recheck source rows.
-The extended check is tested with local simulated responses, not Azure CDC.
+The extended check passed against Azure CDC under the administrator identity.
 It does not configure permissions, inspect the role's `LOGIN`/`REPLICATION`
 attributes, verify the gateway or actual managed-identity permissions,
 establish mirror freshness, or prove downstream access isolation. The
@@ -382,18 +364,19 @@ requirements for the chosen identity rather than assuming either example is
 complete.
 
 The PostgreSQL mirror and its Bronze shortcuts have **not** been created.
-Once private connectivity, source loading, and the required approvals are in
-place, first restrict and verify source, workspace and OneLake access in an
-isolated development environment. Configure the mirror privately using the
+First restrict and verify source, workspace and OneLake access in an
+isolated development environment. Configure the mirror using the
 documented PostgreSQL tutorial; do not grant consumer access. Select only
 `public.facility_room` and `public.facility_closure`; do not select all tables.
-Review the encrypted gateway connection and observe the actual OneLake table
+Review the encrypted cloud connection and observe the actual OneLake table
 paths before configuring the placeholder values in
 [`settings.example.ps1`](./settings.example.ps1) locally. The two paths must
 be under the same `Tables/` folder and end in their exact table names. If the
 observed paths differ, stop and review the implementation instead of guessing.
 
-The existing shortcut script also supports a PostgreSQL mirror. The following
+The existing shortcut script supports only a VNet gateway connection and must
+be updated and tested for the public cloud connection before it can be used.
+The following
 **read-only** preflight calls Fabric status and definition APIs and checks
 the source Delta logs; it does not create the mirror, gateway, directory, or
 shortcuts. Retrieving the definition requires read and write permission on the

@@ -245,60 +245,62 @@ sensitive characteristics from names or create real contact details.
   calendar was not changed.
 - Synthetic HorizonDB seed data and PostgreSQL DDL/validation scripts are
   versioned under `data/sources/horizondb/` and `postgres/`: 300 rooms and 10
-  planned room closures. No HorizonDB item was created, the DDL/seed was not
-  executed against HorizonDB or the Azure source, and no facilities mirror
+  planned room closures. No HorizonDB item was created; the DDL and seed
+  were applied to Azure PostgreSQL, but no facilities mirror
   has been verified. In the signed-in
   Fabric portal, the workspace's New item catalog did not offer HorizonDB,
   and no HorizonDB-specific tenant setting was visible. The reason is
   unconfirmed; preview eligibility and capacity/cost review remain open.
   The local source schema enforces the campus-room relationship, and its
   validator checks the primary keys and validated foreign key. These checks
-  passed locally but have not been deployed.
+  passed against the Azure source.
 - An Azure PostgreSQL Flexible Server fallback was provisioned while
   HorizonDB availability was still unconfirmed. It is now Ready in Sweden
   Central on the General Purpose D2ads v5 tier, with 32 GiB of storage,
   Microsoft Entra authentication enabled, password authentication disabled,
-  and public network access disabled. It incurs compute and storage charges.
-  The empty `macaw_facilities` database, an Entra administrator in the
+  and public network access enabled. It incurs compute and storage charges.
+  The `macaw_facilities` database, an Entra administrator in the
   project tenant and a system-assigned managed identity exist; no Fabric
-  permissions were granted to that identity. The schema and seed have not
-  been applied and no facilities mirror has been deployed. Connectivity and
-  security remain unverified. A VNet data gateway uses 4 CUs per active member
-  and may contend with the shared F4 capacity; obtain approval before
-  activating it or changing shared workspace networking.
+  permissions were granted to that identity. The 300 rooms and 10 closures were
+  loaded and verified row by row. No facilities mirror has been deployed.
+  An Azure-services firewall rule allows connection attempts from all Azure
+  subscriptions, while Entra authentication remains required. A temporary
+  client IP rule used for seeding was removed. Consumer security remains
+  unverified.
 - A read-only subscription inventory visible to the current identity found
   one VNet outside the project resource group and no subnet delegated to Power
   Platform in that VNet; its ownership and suitability are unverified. No
   accessible private endpoint targeted the PostgreSQL server, and local DNS
-  returned no RFC 1918 IPv4 address. These checks are permission-limited and
-  point-in-time; do not modify the existing VNet without approval.
+  returned no RFC 1918 IPv4 address during the earlier check. These checks are
+  permission-limited and point-in-time; do not modify the existing VNet without
+  approval.
 - The Fabric Azure PostgreSQL pipeline connector documents Basic
   authentication for Script activity; the mirroring tutorial separately
   supports organizational accounts. The server has passwords disabled.
   Fabric managed private endpoints support PostgreSQL for Spark workloads,
   not a documented mirroring connection. The documented NotebookUtils token
-  audiences do not include PostgreSQL; an Entra-authenticated seed route
-  remains unverified.
+  audiences do not include PostgreSQL. The source was seeded via its public
+  endpoint using Entra authentication and verified TLS.
 - The supported PostgreSQL `fabric-mirroring start` preparation command
-  completed for the empty facilities database. Readback shows
+  completed before loading the facilities database. Readback shows
   `azure.fabric_mirror_enabled=on` and `wal_level=logical`, with the server
-  Ready and public access disabled. The reported `azure.extensions` and
-  `shared_preload_libraries` values do not show `azure_cdc`; its registration
-  and readiness have not been verified from the database. This preparation
+  Ready. The administrator's read-only CDC prerequisites and both table
+  eligibility checks passed against the database. This preparation
   is not a deployed Fabric mirror or proof that replication works.
 - The PostgreSQL loader has an optional, read-only source readiness check for
   CDC registration, effective role permissions, the extension's
   pre-creation `check_prerequisites()` result and table eligibility. Its
-  extended logic passed local simulated tests, but it has not connected to
-  Azure CDC and does not verify the gateway, replication, freshness or
+  extended logic passed local tests and the administrator check against Azure
+  CDC, but does not verify the Fabric connection, replication, freshness or
   downstream isolation.
   The mirrored school calendar marks both planned closure dates instructional
   for all five campuses; the 17 local schedule overlaps remain plans, not
   observed events or validated Gold results.
 - PostgreSQL Bronze shortcut deployment is prepared, not deployed. The
-  preflight verifies a reviewed encrypted VNet gateway connection, explicit
+  preflight currently requires an encrypted VNet gateway connection, explicit
   two-table mirror definition, paginated status and manually observed Delta
-  paths; tests use simulated responses. It does not establish row equality,
+  paths; adapt it for the public cloud connection. Tests use simulated
+  responses. It does not establish row equality,
   freshness, pipeline access or isolation. The
   `fabric/POSTGRES_SHORTCUT_DEPLOYMENT_BLOCKED` marker prevents the included
   shortcut script from creating paths until the independent security and

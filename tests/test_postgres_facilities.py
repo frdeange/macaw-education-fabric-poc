@@ -21,7 +21,7 @@ from scripts.load_postgres_facilities import (
     load_or_verify,
     main,
     postgres_database_name,
-    private_address,
+    resolve_address,
     verify_local_sources,
 )
 from scripts.generate_facility_incidents import write_dataset as write_incident_dataset
@@ -55,11 +55,23 @@ class PostgresFacilitiesTests(unittest.TestCase):
             return (socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, 5432))
 
         resolve.return_value = [result("10.2.0.4")]
-        self.assertEqual(private_address("example.postgres.database.azure.com"), "10.2.0.4")
+        self.assertEqual(resolve_address("example.postgres.database.azure.com"), "10.2.0.4")
         for addresses in ([], [result("52.1.2.3")], [result("10.2.0.4"), result("52.1.2.3")]):
             resolve.return_value = addresses
             with self.subTest(addresses=addresses), self.assertRaisesRegex(RuntimeError, "exclusively"):
-                private_address("example.postgres.database.azure.com")
+                resolve_address("example.postgres.database.azure.com")
+
+    @patch("scripts.load_postgres_facilities.socket.getaddrinfo")
+    def test_public_dns_requires_opt_in_and_rejects_mixed_addresses(self, resolve):
+        def result(address):
+            return (socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, 5432))
+
+        resolve.return_value = [result("52.1.2.3")]
+        self.assertEqual(resolve_address("example.postgres.database.azure.com", allow_public=True), "52.1.2.3")
+        for addresses in ([], [result("10.2.0.4")], [result("10.2.0.4"), result("52.1.2.3")]):
+            resolve.return_value = addresses
+            with self.subTest(addresses=addresses), self.assertRaisesRegex(RuntimeError, "exclusively"):
+                resolve_address("example.postgres.database.azure.com", allow_public=True)
 
     def test_initialization_refuses_an_existing_public_object(self):
         connection = MagicMock()
@@ -211,7 +223,7 @@ class PostgresFacilitiesTests(unittest.TestCase):
                 patch.object(sys, "argv", arguments),
                 patch.dict(os.environ, {"PGUSER": "example-user"}),
                 patch(f"{module}.verify_local_sources") as verify_sources,
-                patch(f"{module}.private_address", return_value="10.2.0.4") as resolve,
+                patch(f"{module}.resolve_address", return_value="10.2.0.4") as resolve,
                 patch(f"{module}.TenantCheckedCredential") as credential_type,
                 patch(f"{module}.psycopg.connect") as connect,
                 patch(f"{module}.load_or_verify") as load,
