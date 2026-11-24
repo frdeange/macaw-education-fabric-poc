@@ -50,8 +50,9 @@ shortcuts `sql`, `CosmosDB` and `PostGre` to the three mirrors; the raw CSV
 files remain in `Files`. OneLake's table catalog lists 27, 1 and 2 tables in
 those schemas respectively. Administrator Spark reads returned 5,600 SQL
 students, 2,485 teaching assignments, 20 Cosmos incidents, 300 PostgreSQL
-rooms and 10 closures. Of these three schemas, the Bronze SQL analytics
-endpoint currently lists only `sql`; SQL access to the other two is unverified.
+rooms and 10 closures. A live Bronze SQL analytics endpoint query returned all
+three schemas: `sql` (27 tables), `CosmosDB` (one table) and `PostGre` (two
+tables).
 
 The SQL-mirror-only Bronze-to-Silver-to-Gold notebook slice and sequential
 `Macaw Education Medallion` pipeline are deployed. After correcting an

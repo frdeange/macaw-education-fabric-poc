@@ -228,12 +228,12 @@ sensitive characteristics from names or create real contact details.
 - Administrator Spark reads through the schema shortcuts returned 5,600 SQL
   students, 2,485 teaching assignments, 20 Cosmos incidents, 300 PostgreSQL
   rooms and 10 closures. The SQL and Cosmos verify-only scripts checked
-  shortcut targets and Delta-log access. The Bronze SQL analytics endpoint
-  lists the 27 `sql` tables but not `CosmosDB` or `PostGre`; their SQL
-  endpoint availability remains unverified. A read-only metadata sync status
-  check reported legacy `V1` with no migration attempt, which does not
-  establish the cause. A separate pipeline identity and restricted users have
-  not been tested. Source and mirrored counts for all 20 SQL tables matched,
+  shortcut targets and Delta-log access. A live Bronze SQL analytics endpoint
+  query returned all three schemas: `sql` (27 tables), `CosmosDB` (one table)
+  and `PostGre` (two tables). The read-only metadata sync status check reported
+  legacy `V1` with no migration attempt; despite this, the schemas and tables
+  are queryable. A separate pipeline identity and restricted users have not
+  been tested. Source and mirrored counts for all 20 SQL tables matched,
   the declared source primary keys matched, and the source change-feed states
   were `Active`. These checks do not prove row-level equality, a consistent
   cross-table snapshot or mirror freshness. No SQL Bronze Delta materialization

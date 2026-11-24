@@ -138,13 +138,13 @@ Fabric REST confirmed the three shortcut targets; OneLake's table catalog
 listed the counts above. An administrator used Spark to read 5,600 students,
 2,485 teaching assignments, 20 incidents, 300 rooms and 10 closures through
 the new paths. SQL and Cosmos verify-only scripts also checked the target
-and Delta-log paths. The Bronze SQL analytics endpoint currently lists the
-27 `sql` tables but not `CosmosDB` or `PostGre`; their SQL endpoint
-availability remains unverified. These checks do not prove mirror freshness,
-pipeline identity access, or restricted-user isolation.
+and Delta-log paths. A live query of the Bronze SQL analytics endpoint
+returned all three schemas: `sql` (27 tables), `CosmosDB` (one table) and
+`PostGre` (two tables). These checks do not prove mirror freshness, pipeline
+identity access, or restricted-user isolation.
 The [metadata sync status API](https://learn.microsoft.com/en-us/rest/api/fabric/sqlendpoint/items/get-sql-endpoint-metadata-sync-migration-status)
 reported legacy `V1`, with no migration in progress or recorded migration
-attempt. This does not establish why the two schemas are missing.
+attempt. The schemas and tables were nevertheless returned by the SQL query.
 
 The SQL and blocked enrichment notebook definitions now use the schema paths.
 They were updated without running a pipeline or overwriting Silver/Gold.
