@@ -1,9 +1,9 @@
 # %% [markdown]
 # # Bronze to Silver: SQL mirror snapshot
 #
-# Read only the allowlisted SQL mirror shortcuts in Bronze, validate the
-# educational snapshot, and materialize conformed dimensions and facts in the
-# Silver Lakehouse. This notebook does not copy student or teacher names.
+# Read only the allowlisted SQL mirror tables through the Bronze schema
+# shortcut, validate the educational snapshot, and materialize conformed
+# dimensions and facts in Silver. This notebook does not copy person names.
 
 # %% [parameters]
 # Pipeline-overridable parameters. Keep the expected-count contract aligned
@@ -123,7 +123,7 @@ require(batch_id and re.fullmatch(r"[A-Za-z0-9_-]+", batch_id), "Invalid batch_i
 source_tables = {}
 actual_counts = {}
 for table_name in sorted(SOURCE_KEYS):
-    source_path = f"Files/sql_mirror/{table_name}"
+    source_path = f"Tables/sql/{table_name}"
     frame = spark.read.format("delta").load(source_path)
     missing_columns = set(SOURCE_KEYS[table_name]) - set(frame.columns)
     require(not missing_columns, f"{table_name} is missing key columns: {sorted(missing_columns)}.")

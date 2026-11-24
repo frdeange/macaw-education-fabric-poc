@@ -17,8 +17,18 @@ $closurePath = 'Tables/verified_schema/facility_closure'
 $global:MacawPostgresShortcutTest = $null
 
 function Reset-Fixture {
+    $shortcuts = [Collections.Generic.List[object]]::new()
+    $shortcuts.Add([pscustomobject]@{
+        path = '/Tables'; name = 'PostGre'
+        target = [pscustomobject]@{
+            oneLake = [pscustomobject]@{
+                workspaceId = $workspaceId.ToString(); itemId = $mirrorId.ToString()
+                path = 'Tables/verified_schema'
+            }
+        }
+    })
     $global:MacawPostgresShortcutTest = @{
-        Shortcuts = [Collections.Generic.List[object]]::new()
+        Shortcuts = $shortcuts
         Folder = $false
         Posts = 0
         Puts = 0
@@ -217,11 +227,8 @@ function Invoke-WebRequest {
             $status = if ($Matches[1] -eq $global:MacawPostgresShortcutTest.MissingSource) { 404 } else { 200 }
             return [pscustomobject]@{ StatusCode = $status; Headers = @{} }
         }
-        if ($path -match "/$workspaceId/$bronzeId/Files/postgres_mirror/(facility_room|facility_closure)/_delta_log$") {
-            $name = $Matches[1]
-            $found = @($global:MacawPostgresShortcutTest.Shortcuts | Where-Object name -ceq $name)
-            $status = if ($found.Count -eq 1) { 200 } else { 404 }
-            return [pscustomobject]@{ StatusCode = $status; Headers = @{} }
+        if ($path -match "/$workspaceId/$bronzeId/Tables/PostGre/(facility_room|facility_closure)/_delta_log$") {
+            return [pscustomobject]@{ StatusCode = 200; Headers = @{} }
         }
         if ($path -match "/$workspaceId/$bronzeId/Files/postgres_mirror/(facility_room|facility_closure)$") {
             return [pscustomobject]@{ StatusCode = 404; Headers = @{} }
@@ -283,7 +290,7 @@ function Assert-Throws {
 
 function Assert-NoWrites {
     if ($global:MacawPostgresShortcutTest.Posts -ne 0 -or $global:MacawPostgresShortcutTest.Puts -ne 0) {
-        throw 'A shortcut or directory was created before the checks passed.'
+        throw 'A shortcut or directory was created during read-only verification.'
     }
 }
 
@@ -298,7 +305,7 @@ try {
     Assert-NoWrites
     Invoke-Deployment -PreflightOnly
     Assert-NoWrites
-    Assert-Throws { Invoke-Deployment -VerifyOnly } 'missing in verify-only mode'
+    Invoke-Deployment -VerifyOnly
     Assert-NoWrites
     Assert-Throws { Invoke-Deployment -PreflightOnly -VerifyOnly } 'cannot be combined'
     Assert-NoWrites
@@ -316,25 +323,35 @@ try {
     Assert-NoWrites
 
     Reset-Fixture
-    Invoke-Deployment
+    Assert-Throws { Invoke-Deployment } 'legacy Files shortcuts is retired'
     Invoke-Deployment -VerifyOnly
-    Invoke-Deployment
-    if ($global:MacawPostgresShortcutTest.Posts -ne 2 -or $global:MacawPostgresShortcutTest.Puts -ne 1) {
-        throw 'Expected two shortcuts, one directory, and no writes on rerun or verification.'
-    }
+    Assert-NoWrites
 
     Reset-Fixture
     $global:MacawPostgresShortcutTest.LongRunningDefinition = $true
     $global:MacawPostgresShortcutTest.Continuation = 'uri'
-    Invoke-Deployment
-    if ($global:MacawPostgresShortcutTest.Posts -ne 2) { throw 'The asynchronous definition was not read back.' }
-
-    Reset-Fixture
-    Assert-Throws { Invoke-Deployment -VerifyOnly } 'missing in verify-only mode'
+    Invoke-Deployment -PreflightOnly
     Assert-NoWrites
 
     Reset-Fixture
-    Assert-Throws { Invoke-Deployment -RoomPath 'Tables/../facility_room' } 'Delta paths'
+    $global:MacawPostgresShortcutTest.Shortcuts.Clear()
+    Assert-Throws { Invoke-Deployment -VerifyOnly } 'schema shortcut is missing or ambiguous'
+    Assert-NoWrites
+
+    Reset-Fixture
+    $global:MacawPostgresShortcutTest.Shortcuts[0].target.oneLake.path = 'Tables/another_schema'
+    Assert-Throws { Invoke-Deployment -VerifyOnly } 'unexpected or delegated target'
+    Assert-NoWrites
+
+    Reset-Fixture
+    $global:MacawPostgresShortcutTest.Shortcuts.Add([pscustomobject]@{
+        path = '/Files/postgres_mirror'; name = 'facility_room'; target = [pscustomobject]@{}
+    })
+    Assert-Throws { Invoke-Deployment -VerifyOnly } 'Legacy PostgreSQL Files shortcuts still exist'
+    Assert-NoWrites
+
+    Reset-Fixture
+    Assert-Throws { Invoke-Deployment -PreflightOnly -RoomPath 'Tables/../facility_room' } 'Delta paths'
     Assert-NoWrites
 
     foreach ($case in @(
@@ -360,11 +377,11 @@ try {
     )) {
         Reset-Fixture
         $global:MacawPostgresShortcutTest[$case.Property] = $case.Value
-        Assert-Throws { Invoke-Deployment } $case.Error
+        Assert-Throws { Invoke-Deployment -PreflightOnly } $case.Error
         Assert-NoWrites
     }
 } finally {
     Remove-Variable -Name MacawPostgresShortcutTest -Scope Global -ErrorAction SilentlyContinue
 }
 
-Write-Host 'PostgreSQL Bronze shortcut deployment tests passed.'
+Write-Host 'PostgreSQL Bronze shortcut verification and preflight tests passed.'

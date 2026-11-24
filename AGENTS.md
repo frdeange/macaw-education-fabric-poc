@@ -125,13 +125,13 @@ sensitive characteristics from names or create real contact details.
   PostgreSQL Flexible Server as the approved fallback if HorizonDB is
   unavailable. Gold-backed models will serve the two
   Data Agents and Foundry. See `docs/medallion-architecture.md`. The three
-  Lakehouses and SQL endpoints exist; Bronze has individual shortcuts to
-  allowlisted SQL mirror tables. The corrected SQL-mirror-only pipeline has
-  materialized and validated Silver and Gold products. Raw timetable and
-  holiday files and a verified Cosmos mirror shortcut are in Bronze.
-  Enrichment was interrupted; its partial Silver tables have a `Staging`
-  manifest and are not validated products. Restricted-user access remains
-  unverified.
+  Lakehouses and SQL endpoints exist; Bronze has owner-created schema shortcuts
+  for the SQL, Cosmos and PostgreSQL mirrors. The SQL-only pipeline
+  materialized and validated Silver and Gold products before the shortcut
+  migration; its adapted notebook has not been rerun. Raw timetable and
+  holiday files remain in Bronze. Enrichment was interrupted; its partial
+  Silver tables have a `Staging` manifest and are not validated products.
+  Restricted-user access remains unverified.
 - Design the semantic model around clear facts, dimensions, relationships,
   measures, and documented denominators. Prefer the mirrored OneLake data and
   validate the supported storage mode and security behaviour in the target
@@ -212,34 +212,35 @@ sensitive characteristics from names or create real contact details.
   87,100, plus validated Silver and Gold manifests. Gold aggregate totals
   are 5,600 enrollment learners, 5,600 class-size learners, 43,550 subject
   enrollments, 336,000 attendance records and 87,100 assessment results.
-  The Present-or-Late numerator remains 315,842. No pipeline schedule,
-  external failure-notification connection or permissions were configured.
-  HorizonDB and Gold-backed models remain planned; restricted-user access to
-  the Lakehouses and their endpoints is unverified.
-- Bronze contains 20 individual OneLake shortcuts to the operational SQL
-  mirror under `Files/sql_mirror/`, as listed in
-  `fabric/sql-bronze-tables.json`. The old `Analytics*` tables and
-  `SecurityAccessGrant` are excluded. Shortcut targets and Delta-log directory
-  access were checked with the workspace administrator; a separate pipeline
-  identity and restricted users have not been tested. Source and mirrored
-  counts for all 20 tables matched, the declared source primary keys matched,
-  and the source change-feed states were `Active`.
-  These checks do not prove row-level equality, a consistent cross-table
-  snapshot or mirror freshness. The operational SQL mirror remains accessed
-  through shortcuts; no Bronze Delta materialization has run.
-- The owner requested replacing the SQL and Cosmos `Files` shortcuts with
-  schema shortcuts and including the PostgreSQL mirror; CSVs remain files.
-  This migration is not deployed. A read-only inventory found 27 folders in
-  the SQL mirror's `dbo` schema: all 20 reviewed tables plus six `Analytics*`
-  tables and `SecurityAccessGrant`. A shortcut to the whole schema, if
-  supported for this mirror, would broaden the reviewed selection. The Cosmos
-  mirror folder contains one table and the PostgreSQL mirror folder two;
-  persistent PostgreSQL table selection remains unconfirmed. Direct schema
-  shortcut compatibility with these mirrors has not been verified.
-  The existing SQL and Cosmos `Files` shortcuts passed administrator
-  verify-only checks; the SQL notebook still reads the SQL paths. Do not
-  remove them before compatible replacements and dependent notebooks are
-  validated.
+  The Present-or-Late numerator remains 315,842. This validated run preceded
+  the schema-shortcut migration; the adapted notebook has not been rerun.
+  No pipeline schedule, external failure-notification connection or
+  permissions were configured. HorizonDB and Gold-backed models remain
+  planned; restricted-user access to the Lakehouses and their endpoints is
+  unverified.
+- The owner replaced the SQL and Cosmos `Files` shortcuts with three Bronze
+  schema shortcuts: `sql`, `CosmosDB` and `PostGre`. CSV files remain under
+  `Files`. OneLake's table catalog lists 27 SQL tables, one Cosmos table and
+  two PostgreSQL tables. The SQL shortcut exposes the 20 operational tables
+  in `fabric/sql-bronze-tables.json` plus six `Analytics*` tables and
+  `SecurityAccessGrant`. The 20-table processing contract is not a security
+  boundary; future source tables may also become visible.
+- Administrator Spark reads through the schema shortcuts returned 5,600 SQL
+  students, 2,485 teaching assignments, 20 Cosmos incidents, 300 PostgreSQL
+  rooms and 10 closures. The SQL and Cosmos verify-only scripts checked
+  shortcut targets and Delta-log access. The Bronze SQL analytics endpoint
+  lists the 27 `sql` tables but not `CosmosDB` or `PostGre`; their SQL
+  endpoint availability remains unverified. A read-only metadata sync status
+  check reported legacy `V1` with no migration attempt, which does not
+  establish the cause. A separate pipeline identity and restricted users have
+  not been tested. Source and mirrored counts for all 20 SQL tables matched,
+  the declared source primary keys matched, and the source change-feed states
+  were `Active`. These checks do not prove row-level equality, a consistent
+  cross-table snapshot or mirror freshness. No SQL Bronze Delta materialization
+  has run.
+- The `Macaw Bronze to Silver` and `Macaw Bronze Enrichment to Silver`
+  definitions were updated to use the schema paths; the enrichment notebook
+  remains explicitly blocked. Neither notebook was run after the migration.
 - A point-in-time workspace role inventory and the Bronze Lakehouse and SQL
   endpoint item-access inventories each listed only the signed-in workspace
   administrator. Bronze and the PostgreSQL mirror each had only a
@@ -321,18 +322,16 @@ sensitive characteristics from names or create real contact details.
   10 closures match the previously validated source seed row by row. Delta
   logs were observed under `Tables/_public/`. This point-in-time comparison
   does not test subsequent source changes or restricted-user isolation.
-- PostgreSQL Bronze shortcut deployment is prepared, not deployed. The
-  preflight accepts an encrypted OAuth cloud or VNet connection and requires
-  an explicit two-table definition, paginated status and observed Delta paths.
-  The live definition omits `mountedTables`, so the preflight fails closed.
-  The definition documentation says omission selects all tables including
-  future ones, conflicting with the portal observation; the effective
+- The PostgreSQL schema shortcut exists, but its strict read-only preflight
+  fails closed: the live mirror definition omits `mountedTables`. The
+  definition documentation says omission selects all tables including future
+  ones, conflicting with the portal observation; effective persistent
   selection is unconfirmed. Successful preflight tests use simulated
-  responses. It does not establish
-  freshness, pipeline access or isolation. The
-  `fabric/POSTGRES_SHORTCUT_DEPLOYMENT_BLOCKED` marker prevents the included
-  shortcut script from creating paths until the independent security and
-  validation gates pass; the marker is not an access control.
+  responses. Neither the preflight nor the Spark counts establish freshness,
+  pipeline access or isolation. The retained
+  `fabric/POSTGRES_SHORTCUT_DEPLOYMENT_BLOCKED` marker is not an access
+  control and did not prevent the owner-created shortcut. The included script
+  no longer creates legacy `Files` shortcuts.
 - The synthetic Cosmos DB container contains 20 incidents and 40 history
   events. The 20 mirrored documents were compared in full with their seed,
   and the Bronze shortcut to the Cosmos mirror was verified. Events are
@@ -545,19 +544,20 @@ sensitive characteristics from names or create real contact details.
    the evaluator's threshold, trace inputs, temporal scope, and safety
    criteria. Register or verify any suite before claiming one exists. Run a
    batch evaluation only after the project owner approves it.
-7. Preserve the verified SQL-mirror notebook slice and pipeline run; configure
-   an approved external failure notification if required; validate the landed
-   timetable and holiday files against the mirror, then transform them only
-   after the PostgreSQL rooms and closures are seeded and mirrored. Add
+7. Preserve the verified SQL-mirror notebook slice and prior pipeline run;
+   validate the adapted SQL notebook after the schema-shortcut migration,
+   configure an approved external failure notification if required, and
+   validate the landed timetable and holiday files against the mirror. Integrate
+   PostgreSQL into the enrichment notebooks before transforming those sources. Add
    Gold-backed agent-ready models and delegated agent integration afterward.
    Silver and Gold counts and manifests are validated as an administrator,
    but restricted-user access remains unverified. Do not share a new surface
    until its security tests pass.
-8. Resolve the requested schema-shortcut migration without silently expanding
-   the 20-table SQL contract or substituting table shortcuts for the requested
-   schema shortcuts. Confirm source compatibility, persistent source selection,
-   independent security and pipeline access. Update and validate dependent
-   notebooks before removing the exact old shortcuts; preserve raw CSV files.
+8. Validate pipeline identity access and the adapted notebooks after the
+   schema-shortcut migration. Determine whether the Cosmos and PostgreSQL
+   schemas are available through the Bronze SQL endpoint when required.
+   Confirm persistent PostgreSQL source selection and independent security;
+   account for the additional SQL tables and future schema additions.
 
 ## Suggested Prep data for AI review
 

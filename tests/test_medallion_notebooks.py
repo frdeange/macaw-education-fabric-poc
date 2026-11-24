@@ -3,6 +3,8 @@ import json
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,6 +41,100 @@ class MedallionNotebookTests(unittest.TestCase):
             {table["name"]: table["keyColumns"] for table in table_contract["tables"]},
         )
         self.assertEqual(expected_counts, count_baseline["tableCounts"])
+
+    def test_sql_source_loop_reads_reviewed_tables_from_schema_shortcut(self):
+        source = ROOT / "notebooks" / "bronze_to_silver.py"
+        source_keys = assignment_value(source, "SOURCE_KEYS")
+        expected_counts = assignment_value(source, "expected_counts")
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        loop = next(
+            node for node in tree.body
+            if isinstance(node, ast.For)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == "table_name"
+        )
+        reads = []
+        integrity_checks = []
+
+        class Reader:
+            def format(self, value):
+                self.format_name = value
+                return self
+
+            def load(self, path):
+                reads.append((self.format_name, path))
+                table = path.rsplit("/", 1)[-1]
+                return SimpleNamespace(
+                    columns=source_keys[table],
+                    count=lambda: expected_counts[table],
+                )
+
+        def require(condition, message):
+            if not condition:
+                raise AssertionError(message)
+
+        namespace = {
+            "SOURCE_KEYS": source_keys,
+            "expected_counts": expected_counts,
+            "spark": SimpleNamespace(read=Reader()),
+            "require": require,
+            "assert_key_integrity": lambda frame, keys, table: integrity_checks.append(table),
+            "source_tables": {},
+            "actual_counts": {},
+        }
+        exec(compile(ast.Module(body=[loop], type_ignores=[]), str(source), "exec"), namespace)
+
+        self.assertEqual(
+            reads,
+            [("delta", f"Tables/sql/{table}") for table in sorted(source_keys)],
+        )
+        self.assertEqual(integrity_checks, sorted(source_keys))
+        self.assertEqual(namespace["actual_counts"], expected_counts)
+
+    def test_enrichment_reads_schema_shortcuts_and_records_cosmos_lineage(self):
+        source = ROOT / "notebooks" / "bronze_enrichment_to_silver.py"
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        assignments = [
+            node for node in tree.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id in {"assignments", "raw_incidents"}
+                for target in node.targets
+            )
+        ]
+        writes = [
+            node for node in tree.body
+            if isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Name)
+            and node.value.func.id == "write_silver"
+            and isinstance(node.value.args[0], ast.Constant)
+            and node.value.args[0].value in {"facility_incident", "facility_incident_event"}
+        ]
+        spark = MagicMock()
+        write_silver = MagicMock()
+        namespace = {
+            "spark": spark,
+            "F": MagicMock(),
+            "write_silver": write_silver,
+            "incidents": MagicMock(),
+            "incident_events": MagicMock(),
+            "incident_batch_id": "test-batch",
+        }
+        exec(
+            compile(ast.Module(body=assignments + writes, type_ignores=[]), str(source), "exec"),
+            namespace,
+        )
+
+        loads = spark.read.format.return_value.load.call_args_list
+        self.assertEqual(
+            [call.args[0] for call in loads],
+            ["Tables/sql/TeachingAssignment", "Tables/CosmosDB/FacilityIncidents"],
+        )
+        self.assertEqual(
+            [call.args[3] for call in write_silver.call_args_list],
+            [loads[1].args[0], loads[1].args[0]],
+        )
 
     def test_attendance_output_contract_matches_observed_source_rows(self):
         source_counts = assignment_value(

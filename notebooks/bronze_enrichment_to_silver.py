@@ -178,7 +178,7 @@ for key in ("class_section_key", "teacher_key", "room_code"):
     assert_unique(timetable, [key, "day_of_week", "period_number"], f"Timetable {key}")
 
 assignments = (
-    spark.read.format("delta").load("Files/sql_mirror/TeachingAssignment")
+    spark.read.format("delta").load("Tables/sql/TeachingAssignment")
     .select(
         F.col("TeachingAssignmentKey").alias("teaching_assignment_key"),
         F.col("ClassSectionKey").alias("source_class_section_key"),
@@ -261,7 +261,7 @@ event_schema = T.ArrayType(T.StructType([
     T.StructField("eventType", T.StringType(), True),
     T.StructField("occurredOn", T.StringType(), True),
 ]))
-raw_incidents = spark.read.format("delta").load("Files/cosmos_mirror/FacilityIncidents")
+raw_incidents = spark.read.format("delta").load("Tables/CosmosDB/FacilityIncidents")
 require(raw_incidents.count() == 20, "The Cosmos mirror must contain 20 incident documents.")
 incidents = raw_incidents.select(
     F.col("id").alias("incident_id"),
@@ -381,11 +381,11 @@ write_silver(
         "resolved_events", "last_event_type",
     ),
     incident_batch_id,
-    "Files/cosmos_mirror/FacilityIncidents",
+    "Tables/CosmosDB/FacilityIncidents",
 )
 write_silver(
     "facility_incident_event", incident_events, incident_batch_id,
-    "Files/cosmos_mirror/FacilityIncidents",
+    "Tables/CosmosDB/FacilityIncidents",
 )
 write_manifest("Validated", {
     "planned_timetable": 2485, "regional_holiday": 21,

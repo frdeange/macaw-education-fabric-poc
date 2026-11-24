@@ -4,26 +4,23 @@ This is the target architecture for [issue #7](https://github.com/frdeange/macaw
 The existing SQL database, its OneLake mirror, the initial semantic model,
 the unshared Data Agents and the Foundry agent remain the current deployment.
 The three schema-enabled Lakehouses are deployed and their SQL endpoints are
-available. Bronze contains 20 individual shortcuts to the SQL mirror, verified
-with the workspace administrator. The first SQL-mirror-only Silver/Gold
-pipeline run completed after an attendance-count contract correction; its
-products and validated manifests were read back through the SQL analytics
-endpoints. Bronze now also contains the immutable raw timetable/holiday source
-batch `timetable-2026-2027-v2`; its three uploaded files were read back and
-matched their local SHA-256 digests. Cosmos incident documents, their mirror
-and the Bronze shortcut have also been verified. An interrupted enrichment
-run left partial Silver tables with a `Staging` manifest, not validated
-products; no enrichment Gold notebook ran. The PostgreSQL facilities mirror
-reports both tables replicating and its SQL endpoint rows match the validated
-seed; its Bronze shortcuts and Gold-backed models have not been deployed.
-Restricted-user access to the Lakehouses and their endpoints is unverified.
+available. The owner created schema shortcuts for the SQL, Cosmos and
+PostgreSQL mirrors in Bronze. The first SQL-mirror-only Silver/Gold pipeline
+run completed after an attendance-count contract correction; its products and
+validated manifests were read back through the SQL analytics endpoints before
+the shortcut migration. The adapted notebooks have not been rerun. Bronze
+also contains the immutable raw timetable/holiday batch
+`timetable-2026-2027-v2`, whose three files matched their local SHA-256
+digests. An interrupted enrichment run left partial Silver tables with a
+`Staging` manifest, not validated products; no enrichment Gold notebook ran.
+Gold-backed models have not been deployed; restricted-user access is unverified.
 
 ## Data flow
 
 ```text
 Fabric SQL Database --> native OneLake mirror ------+
                                                    |
-PostgreSQL facilities --> OneLake mirror --pending-+--> Bronze --> Silver --> Gold
+PostgreSQL facilities --> OneLake mirror ----------+--> Bronze --> Silver --> Gold
   (HorizonDB preferred; Azure fallback in use)      |                      /       \
 Fabric Cosmos DB ----> OneLake mirror -------------+             Operations      Outcomes
 Synthetic timetable CSV + official holiday dates --+             model           model
@@ -75,8 +72,8 @@ Do not modify the existing VNet without approval.
 
 The source loader now includes the extension's pre-creation
 `azure_cdc.check_prerequisites()` check in addition to the role and table
-checks. The PostgreSQL shortcut path is prepared locally with an explicit
-two-table contract and a mirror preflight, but no facilities shortcut exists.
+checks. The PostgreSQL schema shortcut was created by the owner; the local
+mirror preflight retains an explicit two-table contract.
 Both selected tables report `Replicating`, and the 300 room and 10 closure
 rows in the SQL analytics endpoint match the previously validated source seed.
 Their Delta logs were observed under `Tables/_public/`. The preflight accepts
@@ -85,8 +82,9 @@ paginated replication status and manually observed Delta-log paths. It
 does not prove source-to-mirror equality, current data, pipeline access, or
 security.
 [`POSTGRES_SHORTCUT_DEPLOYMENT_BLOCKED`](../fabric/POSTGRES_SHORTCUT_DEPLOYMENT_BLOCKED)
-prevents the included script from creating PostgreSQL shortcuts until the
-independent security and validation gates are met; it is not an access control.
+is retained until the independent security and validation gates are met; it
+is not an access control and did not prevent the owner-created shortcut.
+The included script no longer creates legacy `Files` shortcuts.
 The live preflight fails closed because the returned definition omits
 `mountedTables`; the portal showed the two-table selection with future tables
 disabled. The [definition documentation](https://learn.microsoft.com/en-us/rest/api/fabric/articles/item-management/definitions/mirrored-database-definition)
@@ -105,51 +103,54 @@ The uploader stores and verifies the raw timetable, holiday extract and
 manifest without overwriting existing batch paths. An earlier immutable `v1`
 upload with 18 holiday rows remains in Bronze; use only the `v2` paths.
 Facilities seed CSVs are not uploaded as an alternate source of truth: they
-are inputs for the pending HorizonDB seed.
+were inputs for the Azure PostgreSQL seed and remain available for HorizonDB.
 
-The SQL and HorizonDB mirrors are distinct from the Bronze Lakehouse. Verify
-that a OneLake shortcut is supported for each actual mirror and the pipeline
-identity before using it. Materialize selected data into Bronze Delta tables;
-if a shortcut is unsupported, evaluate a documented route from the mirrored
-analytical copy rather than silently reading the operational database. Monitor
-each table's initial copy, later changes and reseeds. A mirror is a current
-replica, not an immutable change history or a freshness guarantee.
+The mirrors are distinct from the Bronze Lakehouse. Read the selected tables
+through their schema shortcuts and materialize validated Silver and Gold
+products; no SQL-mirror Bronze copy has been made. Validate the actual
+pipeline identity and monitor each table's initial copy, later changes and
+reseeds. A mirror is a current replica, not an immutable change history or a
+freshness guarantee.
 
 The SQL mirror's 20 operational tables are enumerated, with their source keys,
-in [`sql-bronze-tables.json`](../fabric/sql-bronze-tables.json). Individual
-shortcuts under Bronze `Files/sql_mirror/` point only to those tables; the
-`Analytics*` snapshots and `SecurityAccessGrant` are excluded. The deployment
-script verifies the actual shortcut targets and access to their Delta-log
-directories, and does not overwrite existing paths. These checks do not prove
-that a separately configured pipeline identity can use the shortcuts, nor
-that the mirror is complete or current. No access grants were made.
+in [`sql-bronze-tables.json`](../fabric/sql-bronze-tables.json). The notebook
+reads only those tables, but the schema shortcut itself also exposes the
+`Analytics*` snapshots and `SecurityAccessGrant`. The table contract is a
+processing allowlist, not an access control.
 
-### Requested schema-shortcut migration
+### Bronze schema shortcuts
 
-The owner requested schema shortcuts for the SQL, Cosmos and PostgreSQL
-mirrors instead of the existing shortcuts under `Files`; the raw CSV files
-remain files. No schema shortcut has been deployed for this migration.
+The owner created schema shortcuts for the SQL, Cosmos and PostgreSQL
+mirrors and removed the old SQL and Cosmos shortcuts under `Files`. The raw
+CSV files remain in place.
 [Lakehouse schema shortcuts](https://learn.microsoft.com/en-us/fabric/data-engineering/lakehouse-schemas#bring-multiple-tables-with-schema-shortcut)
 reference all tables in the selected source schema; the documented
 [OneLake shortcut API](https://learn.microsoft.com/en-us/rest/api/fabric/core/onelake-shortcuts/create-shortcut)
 does not specify a table allowlist for a schema target.
 
-The SQL mirror's `dbo` folder currently contains all 20 reviewed tables and
-seven excluded tables: six `Analytics*` snapshots and `SecurityAccessGrant`.
-A whole-schema shortcut would therefore broaden the reviewed selection if
-Fabric accepts that mirror as a schema-shortcut source. The Cosmos folder
-currently contains one incident table and the PostgreSQL `_public` folder
-contains the two facilities tables. Their eligibility as direct
-schema-shortcut sources has not been tested. Source changes can also affect
-what a schema shortcut exposes, and the PostgreSQL mirror's persistent
-selection remains unconfirmed.
+| Bronze schema | Mirror schema | Cataloged tables |
+| --- | --- | --- |
+| `sql` | Fabric SQL `dbo` | 27: 20 reviewed operational tables, six `Analytics*` snapshots and `SecurityAccessGrant` |
+| `CosmosDB` | Cosmos `MacawFacilitiesIncidents` | One incident table |
+| `PostGre` | PostgreSQL `_public` | Two facilities tables |
 
-The existing 20 SQL shortcuts and one Cosmos shortcut passed read-only
-administrator verification. The three immutable timetable, holiday and
-manifest files also passed read-only checksum verification. The deployed SQL
-notebook still reads the `Files/sql_mirror/` paths. Preserve these shortcuts
-until replacements and notebook changes have been validated; do not remove or
-alter source tables or the raw timetable and holiday files.
+Fabric REST confirmed the three shortcut targets; OneLake's table catalog
+listed the counts above. An administrator used Spark to read 5,600 students,
+2,485 teaching assignments, 20 incidents, 300 rooms and 10 closures through
+the new paths. SQL and Cosmos verify-only scripts also checked the target
+and Delta-log paths. The Bronze SQL analytics endpoint currently lists the
+27 `sql` tables but not `CosmosDB` or `PostGre`; their SQL endpoint
+availability remains unverified. These checks do not prove mirror freshness,
+pipeline identity access, or restricted-user isolation.
+The [metadata sync status API](https://learn.microsoft.com/en-us/rest/api/fabric/sqlendpoint/items/get-sql-endpoint-metadata-sync-migration-status)
+reported legacy `V1`, with no migration in progress or recorded migration
+attempt. This does not establish why the two schemas are missing.
+
+The SQL and blocked enrichment notebook definitions now use the schema paths.
+They were updated without running a pipeline or overwriting Silver/Gold.
+The CSV and manifest files passed read-only checksum verification. Future
+source tables may also appear through a schema shortcut; PostgreSQL's
+persistent source-table selection remains unconfirmed.
 
 A point-in-time workspace role inventory and the Bronze Lakehouse and SQL
 endpoint item-access inventories each listed only the signed-in administrator.
@@ -246,7 +247,7 @@ The versioned notebook sources in [`notebooks/`](../notebooks/) define a
 first vertical slice for the current SQL-mirror snapshot only:
 
 - [`bronze_to_silver.py`](../notebooks/bronze_to_silver.py) reads the 20
-  allowlisted Delta shortcuts from Bronze `Files/sql_mirror/`. It checks the
+  reviewed Delta tables through Bronze `Tables/sql/`. It checks the
   reviewed per-table row-count and primary-key contracts, core foreign keys,
   class sizes, school-unit/year-level consistency, VMBO/HAVO/VWO duration and
   eligibility, observed instructional-day attendance, and assessment result

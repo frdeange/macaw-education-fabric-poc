@@ -3,5 +3,7 @@ Bronze Lakehouse and OneLake access controls have been independently configured
 and tested with the authorized and denied identities. Validate the mirror,
 source-to-mirror equality, and the intended pipeline identity before release.
 
-This marker blocks the included shortcut deployment script only. It is not an
-access control and does not protect the source, mirror, or existing shortcuts.
+The owner-created PostgreSQL schema shortcut already exists. This marker is
+not an access control and does not protect the source, mirror, or shortcut.
+The included script does not create legacy Files shortcuts even if this marker
+is removed; its PostgreSQL verification retains the strict mirror preflight.

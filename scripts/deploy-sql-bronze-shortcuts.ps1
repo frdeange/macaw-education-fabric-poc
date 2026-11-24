@@ -61,6 +61,8 @@ $sourceType = 'SQLDatabase'
 $sourceName = $SourceDatabaseName
 $folderName = 'sql_mirror'
 $sourceLabel = 'SQL'
+$bronzeSchema = 'sql'
+$schemaTarget = "Tables/$($contract.sourceSchema)"
 if ($PreflightOnly -and ($VerifyOnly -or $SourceKind -ne 'AzurePostgreSql')) {
     throw 'Preflight-only mode is available for PostgreSQL and cannot be combined with verify-only mode.'
 }
@@ -86,10 +88,15 @@ if ($SourceKind -eq 'AzurePostgreSql') {
     $sourceName = $PostgresMirrorName
     $folderName = 'postgres_mirror'
     $sourceLabel = 'PostgreSQL'
+    $bronzeSchema = 'PostGre'
+    $schemaTarget = $PostgresRoomPath.Substring(0, $PostgresRoomPath.LastIndexOf('/'))
 } else {
     foreach ($table in $tables) {
         $targets[$table.name] = "Tables/$($contract.sourceSchema)/$($table.name)"
     }
+}
+if (-not $VerifyOnly -and -not $PreflightOnly) {
+    throw 'Creation of legacy Files shortcuts is retired. Manage schema shortcuts in Fabric and use -VerifyOnly.'
 }
 
 . (Join-Path $PSScriptRoot 'fabric-api.ps1')
@@ -141,7 +148,6 @@ if ($filesUri.Scheme -ne 'https' -or
     $filesUri.AbsolutePath.TrimEnd('/') -ne $expectedFilesPath) {
     throw 'The Bronze OneLake Files path does not match the expected workspace and item.'
 }
-$filesPath = $filesUri.AbsoluteUri.TrimEnd('/')
 $storageRoot = $filesUri.GetLeftPart([UriPartial]::Authority)
 
 $storageToken = & az account get-access-token --subscription $SubscriptionId.ToString() `
@@ -158,62 +164,11 @@ if ($claims.tid -ne $TenantId.ToString() -or ([string]$claims.aud).TrimEnd('/') 
 $storageHeaders = @{ Authorization = "Bearer $storageToken"; 'x-ms-version' = '2023-08-03' }
 
 try {
-    $shortcutPath = "Files/$folderName"
-    $folderUri = "$filesPath/$folderName"
-    $folderResponse = Invoke-WebRequest -Method Head -Uri $folderUri -Headers $storageHeaders -SkipHttpErrorCheck
-    if ($folderResponse.StatusCode -eq 200) {
-        if ([string]@($folderResponse.Headers['x-ms-resource-type'])[0] -ne 'directory') {
-            throw "The $sourceLabel mirror landing path exists but is not a directory."
-        }
-        $folderExists = $true
-    } elseif ($folderResponse.StatusCode -eq 404) {
-        $folderExists = $false
-    } else {
-        throw "Unable to inspect the $sourceLabel mirror landing directory: HTTP $($folderResponse.StatusCode)."
-    }
-
-    $shortcuts = @(Get-FabricItems -Uri "$base/items/$($bronze[0].id)/shortcuts" -Headers $headers)
-    $landingShortcuts = @($shortcuts | Where-Object { $_.path.TrimStart('/') -ceq $shortcutPath })
-    $unexpected = @($shortcuts | Where-Object {
-        $parent = $_.path.TrimStart('/')
-        ($parent -ceq 'Files' -and $_.name -ceq $folderName) -or
-        ($parent -ceq $shortcutPath -and $_.name -cnotin $tables.name) -or
-        $parent.StartsWith("$shortcutPath/", [StringComparison]::Ordinal)
-    })
-    if ($unexpected.Count -gt 0) {
-        throw "The $sourceLabel mirror landing directory contains shortcuts outside the reviewed table contract."
-    }
-
-    $missing = @()
     foreach ($table in $tables) {
         $sourceLog = "$storageRoot/$WorkspaceId/$DatabaseItemId/$($targets[$table.name])/_delta_log"
         $sourceResponse = Invoke-WebRequest -Method Head -Uri $sourceLog -Headers $storageHeaders -SkipHttpErrorCheck
         if ($sourceResponse.StatusCode -ne 200) {
             throw "The mirrored Delta log for '$($table.name)' is not accessible: HTTP $($sourceResponse.StatusCode)."
-        }
-
-        $existing = @($landingShortcuts | Where-Object { $_.name -ceq $table.name })
-        if ($existing.Count -gt 1) {
-            throw "Multiple shortcuts exist for '$($table.name)'; inspect them before proceeding."
-        }
-        if ($existing.Count -eq 1) {
-            $target = $existing[0].target
-            if (-not $target.PSObject.Properties['oneLake'] -or -not $target.oneLake -or
-                $target.oneLake.workspaceId -ne $WorkspaceId.ToString() -or
-                $target.oneLake.itemId -ne $DatabaseItemId.ToString() -or
-                $target.oneLake.path -cne $targets[$table.name] -or
-                ($target.oneLake.PSObject.Properties['connectionId'] -and $target.oneLake.connectionId)) {
-                throw "Shortcut '$($table.name)' points to an unexpected or delegated target."
-            }
-        } else {
-            if ($folderExists) {
-                $collision = Invoke-WebRequest -Method Head -Uri "$folderUri/$($table.name)" `
-                    -Headers $storageHeaders -SkipHttpErrorCheck
-                if ($collision.StatusCode -ne 404) {
-                    throw "A path already exists or cannot be inspected for '$($table.name)': HTTP $($collision.StatusCode)."
-                }
-            }
-            $missing += $table
         }
     }
 
@@ -222,63 +177,45 @@ try {
         Write-Host 'Validate row equality, freshness, pipeline access and restricted-user isolation separately.'
         return
     }
-    if ($VerifyOnly -and (-not $folderExists -or $missing.Count -gt 0)) {
-        throw "$sourceLabel mirror shortcuts missing in verify-only mode: $(($missing.name) -join ', ')."
-    }
-    if (-not $folderExists) {
-        $createHeaders = $storageHeaders.Clone()
-        $createHeaders['If-None-Match'] = '*'
-        $folderResponse = Invoke-WebRequest -Method Put -Uri "${folderUri}?resource=directory" `
-            -Headers $createHeaders -Body '' -SkipHttpErrorCheck
-        if ($folderResponse.StatusCode -ne 201) {
-            throw "The $sourceLabel mirror landing directory was not created: HTTP $($folderResponse.StatusCode). Inspect before retrying."
-        }
-    }
-
-    foreach ($table in $missing) {
-        $body = @{
-            path = $shortcutPath
-            name = $table.name
-            target = @{
-                oneLake = @{
-                    workspaceId = $WorkspaceId.ToString()
-                    itemId = $DatabaseItemId.ToString()
-                    path = $targets[$table.name]
-                }
-            }
-        } | ConvertTo-Json -Depth 6 -Compress
-        $response = Invoke-WebRequest -Method Post -Uri "$base/items/$($bronze[0].id)/shortcuts" `
-            -Headers $headers -ContentType 'application/json' -Body $body -SkipHttpErrorCheck
-        if ($response.StatusCode -ne 201) {
-            throw "Shortcut '$($table.name)' was not created: HTTP $($response.StatusCode). Inspect before retrying."
-        }
-    }
 
     $shortcuts = @(Get-FabricItems -Uri "$base/items/$($bronze[0].id)/shortcuts" -Headers $headers)
+    $matches = @($shortcuts | Where-Object {
+        $_.path.TrimStart('/') -ceq 'Tables' -and $_.name -ceq $bronzeSchema
+    })
+    if ($matches.Count -ne 1) {
+        throw "The $sourceLabel schema shortcut is missing or ambiguous in verify-only mode."
+    }
+    $target = $matches[0].target
+    if (-not $target.PSObject.Properties['oneLake'] -or -not $target.oneLake -or
+        $target.oneLake.workspaceId -ne $WorkspaceId.ToString() -or
+        $target.oneLake.itemId -ne $DatabaseItemId.ToString() -or
+        $target.oneLake.path -cne $schemaTarget -or
+        ($target.oneLake.PSObject.Properties['connectionId'] -and $target.oneLake.connectionId)) {
+        throw "The $sourceLabel schema shortcut points to an unexpected or delegated target."
+    }
+    $legacyPath = "Files/$folderName"
+    $legacyShortcuts = @($shortcuts | Where-Object {
+        $parent = $_.path.TrimStart('/')
+        ($parent -ceq 'Files' -and $_.name -ceq $folderName) -or
+        $parent -ceq $legacyPath -or
+        $parent.StartsWith("$legacyPath/", [StringComparison]::Ordinal)
+    })
+    if ($legacyShortcuts.Count -gt 0) {
+        throw "Legacy $sourceLabel Files shortcuts still exist; inspect them before proceeding."
+    }
     foreach ($table in $tables) {
-        $matches = @($shortcuts | Where-Object {
-            $_.path.TrimStart('/') -ceq $shortcutPath -and $_.name -ceq $table.name
-        })
-        if ($matches.Count -ne 1 -or
-            -not $matches[0].target.PSObject.Properties['oneLake'] -or
-            $matches[0].target.oneLake.workspaceId -ne $WorkspaceId.ToString() -or
-            $matches[0].target.oneLake.itemId -ne $DatabaseItemId.ToString() -or
-            $matches[0].target.oneLake.path -cne $targets[$table.name] -or
-            ($matches[0].target.oneLake.PSObject.Properties['connectionId'] -and
-                $matches[0].target.oneLake.connectionId)) {
-            throw "Shortcut '$($table.name)' did not resolve to the expected target."
-        }
-        $logResponse = Invoke-WebRequest -Method Head -Uri "$folderUri/$($table.name)/_delta_log" `
+        $logResponse = Invoke-WebRequest -Method Head `
+            -Uri "$storageRoot/$WorkspaceId/$($bronze[0].id)/Tables/$bronzeSchema/$($table.name)/_delta_log" `
             -Headers $storageHeaders -SkipHttpErrorCheck
         if ($logResponse.StatusCode -ne 200) {
             throw "Shortcut '$($table.name)' cannot read its Delta log: HTTP $($logResponse.StatusCode)."
         }
     }
-    Write-Host "Verified $($tables.Count) allowlisted $sourceLabel-mirror shortcuts in Bronze Files."
+    Write-Host "Verified $($tables.Count) reviewed $sourceLabel tables through the Bronze '$bronzeSchema' schema shortcut."
+    Write-Host 'A schema shortcut exposes the entire source schema, not just the reviewed table contract.'
     Write-Host 'No data was materialized and no permissions were granted. Restricted access remains unverified.'
 } finally {
     $storageHeaders.Clear()
     $headers.Clear()
-    if (Get-Variable -Name createHeaders -ErrorAction SilentlyContinue) { $createHeaders.Clear() }
     $storageToken = $null
 }
