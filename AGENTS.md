@@ -127,8 +127,9 @@ sensitive characteristics from names or create real contact details.
   Data Agents and Foundry. See `docs/medallion-architecture.md`. The three
   Lakehouses and SQL endpoints exist; Bronze has owner-created schema shortcuts
   for the SQL, Cosmos and PostgreSQL mirrors. The SQL-only pipeline was rerun
-  and validated after the shortcut migration. Separate four-source
-  enrichment notebook runs produced validated Silver and Gold manifests.
+  and validated after the shortcut migration. The four-stage SQL and
+  four-source enrichment pipeline completed, and its Silver and Gold
+  manifests and totals were validated.
   Raw timetable and holiday files remain in Bronze. Restricted-user access
   remains unverified.
 - Design the semantic model around clear facts, dimensions, relationships,
@@ -240,7 +241,7 @@ sensitive characteristics from names or create real contact details.
   has run.
 - All four SQL and enrichment notebook definitions use the schema paths.
   The four-stage pipeline definition and its failure paths were deployed and
-  read back; the two enrichment notebooks were separately run and validated.
+  read back. The pipeline and all four notebook activities completed.
 - A point-in-time workspace role inventory and the Bronze Lakehouse and SQL
   endpoint item-access inventories each listed only the signed-in workspace
   administrator. Bronze and the PostgreSQL mirror each had only a
@@ -343,9 +344,12 @@ sensitive characteristics from names or create real contact details.
   manifest and endpoint counts showed 2,485 planned assignments, 21 holiday
   rows, 300 rooms, 10 planned closures, 20 incidents and 40 events. It found
   17 planned closure/assignment overlaps, no capacity exceedances and 20
-  advisory holiday-calendar variances. A separate Gold run and SQL readback
-  confirmed matching totals. This administrator validation does not establish
-  source freshness or restricted-user security.
+  advisory holiday-calendar variances. The four-stage pipeline was then run;
+  SQL endpoint readback confirmed all four validated manifests and matching
+  totals. Bidirectional comparisons of Silver rooms and closures with the
+  Bronze mirror found no differences, and an independent SQL reconstruction
+  matched all closure/assignment impact keys. This administrator validation
+  does not establish source freshness or restricted-user security.
 - A documented Fabric REST API for `PostgreSQLDatabase` exists and lists zero
   items in the workspace, but its applicability to HorizonDB has not been
   confirmed. A successful list call does not prove that creation is enabled.

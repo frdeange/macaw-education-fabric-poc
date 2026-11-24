@@ -9,12 +9,11 @@ PostgreSQL mirrors in Bronze. The first SQL-mirror-only Silver/Gold pipeline
 run completed after an attendance-count contract correction; its products and
 validated manifests were read back through the SQL analytics endpoints before
 the shortcut migration. The SQL-only pipeline was rerun successfully after the
-migration. Bronze
-also contains the immutable raw timetable/holiday batch
+migration. Bronze also contains the immutable raw timetable/holiday batch
 `timetable-2026-2027-v2`, whose three files matched their local SHA-256
-digests. Later individual enrichment notebook runs replaced an earlier
-incomplete staging batch and validated four-source Silver and Gold products.
-The four-stage pipeline definition was deployed and read back. Gold-backed
+digests. Later enrichment runs replaced an earlier incomplete staging batch.
+The four-stage pipeline was deployed, read back and run; all four manifests
+and Silver/Gold totals were validated through their SQL endpoints. Gold-backed
 models have not been deployed; restricted-user access is unverified.
 
 ## Data flow
@@ -286,6 +285,12 @@ observed incidents. A closure can appear in more than one department; distinct
 closure counts across departments must not be added. Shared room identifiers
 do not establish that an incident caused a closure.
 
+After the four-stage pipeline run, bidirectional SQL `EXCEPT` comparisons
+found no differences between the Bronze PostgreSQL mirror and Silver room and
+closure rows. An independent SQL reconstruction matched all planned
+closure/assignment impact keys in both directions. These are point-in-time
+comparisons, not a continuous replication guarantee.
+
 These are administrator checks against the selected synthetic snapshot, not
 proof of mirror freshness, a consistent cross-source transaction or effective
 restricted-user permissions. The PostgreSQL definition's future-table
@@ -315,9 +320,9 @@ defines the ordered activities and their failure paths;
 [`deploy-medallion-pipeline.ps1`](../scripts/deploy-medallion-pipeline.ps1)
 deployed the `Macaw Education Medallion` item. A definition readback confirmed
 four sequential notebook activities, four failure activities, and both
-pipeline parameters. The earlier SQL-only pipeline and the individual
-enrichment runs completed and their Silver/Gold outputs and manifests were
-validated through the SQL analytics endpoints. Definition deployment
+pipeline parameters. A full pipeline run completed all four notebook
+activities, and its Silver/Gold outputs and four manifests were validated
+through the SQL analytics endpoints. Definition deployment
 does not verify mirror freshness, external failure alerts, restricted-user
 access, or cross-Lakehouse data permissions.
 

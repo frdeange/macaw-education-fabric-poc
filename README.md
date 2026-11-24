@@ -64,10 +64,10 @@ The 20 instructional dates within the advisory May holiday extension are
 recorded without changing the school calendar. These overlaps are plans, not
 observed lessons or incidents.
 
-The four-stage `Macaw Education Medallion` pipeline definition has been
-deployed and read back. It has no schedule or external failure-notification
-connection. Validation is under an administrator identity and is not an
-access control.
+The four-stage `Macaw Education Medallion` pipeline was deployed, read back
+and run successfully. All four manifests and output totals were checked after
+the run. It has no schedule or external failure-notification connection.
+Validation is under an administrator identity and is not an access control.
 See the [medallion design](./docs/medallion-architecture.md) for source,
 security and validation requirements.
 
@@ -113,7 +113,7 @@ counts across subjects or departments can overlap.
 | Semantic model | Direct Lake model deployed and checked against SQL using an administrator identity. Its row-level security is **not validated**. Name fields are intentionally not in the published model. |
 | Data Agents | Both agents are published but unshared. Administrator smoke tests returned 960 Dutch students per campus and 87,100 assessment results; individual-subject attendance was correctly declined. These tests do not establish general reliability or restricted-user isolation. |
 | Foundry | A prompt agent with two delegated Fabric IQ connections was deployed and smoke-tested as an administrator. Version 1 predates the subject-enrollment instruction update; restricted-user access is unverified. |
-| Medallion architecture | Three schema-enabled Lakehouses and the owner-created SQL, Cosmos and PostgreSQL Bronze schema shortcuts exist. The SQL pipeline was rerun after the shortcut migration, and separate four-source enrichment runs produced validated Silver and Gold manifests. The four-stage pipeline definition was deployed and read back. Restricted-user security is unverified. |
+| Medallion architecture | Three schema-enabled Lakehouses and the owner-created SQL, Cosmos and PostgreSQL Bronze schema shortcuts exist. The four-stage SQL and enrichment pipeline completed, and Silver and Gold manifests and totals were validated after the run. Restricted-user security is unverified. |
 | Cosmos DB incidents | The synthetic container holds 20 incidents and 40 history events. All documents were compared with the OneLake mirror; an administrator Spark read through the Bronze schema shortcut returned 20 incidents. Restricted-user access remains unverified. |
 | PostgreSQL facilities | The fallback server contains 300 synthetic rooms and 10 planned closures. Its Fabric mirror reports both tables replicating, and its SQL endpoint rows match the validated seed. Administrator Spark reads through the Bronze schema shortcut returned 300 and 10 rows. Public access is enabled with an Azure-services firewall rule, Entra authentication and passwords disabled. Persistent table selection and restricted-user security remain unverified. The server incurs compute and storage costs. |
 | GraphQL | Planned only; no API, generated schema, or security validation has been completed. |
