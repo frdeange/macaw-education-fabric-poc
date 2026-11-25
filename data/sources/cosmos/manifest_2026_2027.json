@@ -1,0 +1,7 @@
+{
+  "batchId": "facilities-incidents-2026-2027-v1",
+  "dataFile": "facility_incidents_2026_2027.jsonl",
+  "observationDate": "2026-11-20",
+  "records": 20,
+  "sha256": "5f51df0eb652cdc72b0a1fd4a8f4a0e890c5278a2ac2a32ce99070becc5d1bc0"
+}

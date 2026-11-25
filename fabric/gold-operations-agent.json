@@ -1,0 +1,32 @@
+{
+  "agents": [
+    {
+      "name": "Macaw Gold School Operations Agent",
+      "description": "Answers questions about the synthetic education snapshot, planned schedules and facility incidents using the Gold operations model.",
+      "tables": ["Campus", "Class Section", "Date", "Department", "Programme Track", "Subject", "Year Level", "Enrollment", "Subject Enrollment", "Attendance", "Planned Timetable", "Facility Incidents", "Planned Closure Impacts"],
+      "elementDescriptions": [
+        {"table": "Enrollment", "description": "One student enrollment in a class for the snapshot academic year."},
+        {"table": "Enrollment", "element": "Students", "description": "Distinct snapshot students; department or subject selects enrolled students, not attendance."},
+        {"table": "Subject Enrollment", "description": "One student enrolled in one subject; students may take multiple subjects."},
+        {"table": "Subject Enrollment", "element": "Students in Subject", "description": "Distinct students taking selected subjects; subject subtotals may overlap."},
+        {"table": "Attendance", "description": "One observed student-day, not attendance at an individual lesson."},
+        {"table": "Attendance", "element": "Observed Attendance Records", "description": "Observed student-days. A department selects students taking a department subject, not individual lessons."},
+        {"table": "Planned Timetable", "description": "One planned recurring weekly teaching assignment, not an observed lesson."},
+        {"table": "Planned Closure Impacts", "description": "One planned overlap between a room closure and an assignment."}
+      ],
+      "instructions": [
+        "Answer in English using only the connected data source. State clearly when the source cannot answer a question.",
+        "Do not invent values, infer sensitive characteristics, predict individual outcomes, or label individual students as at risk.",
+        "Distinguish plans from observed events and cite the relevant date or period where available.",
+        "Attendance is recorded per student and day, never per lesson or subject. If asked for attendance at a particular subject or lesson, state that it is unavailable; do not use overall attendance as a substitute.",
+        "A department attendance breakdown selects students who take at least one subject in that department, not attendance at that department's lessons. Students may belong to multiple departments."
+      ],
+      "exampleQuestions": [
+        "How many students are enrolled at each campus?",
+        "How many students study Dutch at each campus?",
+        "What is the observed attendance rate?",
+        "How many planned assignments overlap a room closure?"
+      ]
+    }
+  ]
+}

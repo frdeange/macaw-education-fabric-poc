@@ -1,0 +1,11 @@
+﻿ClosureKey,CampusKey,RoomCode,ClosureDate,ClosureReason,Status,SourceVersion
+1,1,AMS-R003,2027-03-02,Planned maintenance,Planned,timetable-2026-2027-v2
+2,1,AMS-R004,2027-04-06,Planned maintenance,Planned,timetable-2026-2027-v2
+3,2,UTR-R001,2027-03-02,Planned maintenance,Planned,timetable-2026-2027-v2
+4,2,UTR-R003,2027-04-06,Planned maintenance,Planned,timetable-2026-2027-v2
+5,3,RTM-R001,2027-03-02,Planned maintenance,Planned,timetable-2026-2027-v2
+6,3,RTM-R002,2027-04-06,Planned maintenance,Planned,timetable-2026-2027-v2
+7,4,EIN-R002,2027-03-02,Planned maintenance,Planned,timetable-2026-2027-v2
+8,4,EIN-R004,2027-04-06,Planned maintenance,Planned,timetable-2026-2027-v2
+9,5,GRN-R001,2027-03-02,Planned maintenance,Planned,timetable-2026-2027-v2
+10,5,GRN-R002,2027-04-06,Planned maintenance,Planned,timetable-2026-2027-v2
