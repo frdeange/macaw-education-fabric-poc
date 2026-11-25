@@ -36,11 +36,12 @@ Fabric SQL Database -- asynchronous mirroring --> OneLake
 ```
 
 The Gold Data Agents are published but unshared. MCP smoke tests exposed an
-operations-agent attendance error and an incorrect refusal; agent reliability
-is not established. The earlier Data Agents were deleted by the owner; the
-existing Foundry version still references them. The proposed GraphQL API is **not
-deployed**. The intended external consumers are
-users in the same Microsoft Entra tenant, using delegated identities.
+operations-agent attendance error, an incorrect refusal, and an Outcomes
+calendar count of 731 instead of 730; agent reliability is not established.
+The earlier Data Agents were deleted by the owner; the existing Foundry version
+still references them. The proposed GraphQL API is **not deployed**. The
+intended external consumers are users in the same Microsoft Entra tenant,
+using delegated identities.
 
 ## Target medallion architecture
 
@@ -114,7 +115,7 @@ counts across subjects or departments can overlap.
 | Synthetic names | Populated and validated in SQL. Student, teacher, and analytical learner counts and keyed name digests match the SQL analytics endpoint, including Unicode. |
 | Mirroring and analytics | Operational and analytical tables are mirrored. The 43,550 subject-enrollment rows and the other analytical tables are point-in-time snapshots, not automatically refreshed from later operational changes. |
 | Semantic model | Two Gold Direct Lake models use detailed facts and passed selected administrator DAX checks; RLS is **not validated**. Names are excluded. |
-| Data Agents | Two Gold-backed agents are published but unshared. MCP tests found an attendance error and an incorrect refusal; reliability is not established. The owner deleted the earlier SQL-backed agents. |
+| Data Agents | Two Gold-backed agents are published but unshared. MCP tests found attendance and calendar-count errors and an incorrect refusal; reliability is not established. The owner deleted the earlier SQL-backed agents. |
 | Foundry | The existing prompt agent's version 1 references the deleted agents; its new Gold integration is not configured or tested. Restricted-user access is unverified. |
 | Medallion architecture | Three schema-enabled Lakehouses and the owner-created SQL, Cosmos and PostgreSQL Bronze schema shortcuts exist. The four-stage SQL and enrichment pipeline completed, and Silver and Gold manifests and totals were validated after the run. Restricted-user security is unverified. |
 | Cosmos DB incidents | The synthetic container holds 20 incidents and 40 history events. All documents were compared with the OneLake mirror; an administrator Spark read through the Bronze schema shortcut returned 20 incidents. Restricted-user access remains unverified. |
@@ -487,6 +488,12 @@ workspace after checking that the database exists and the model name is unused.
 its update mode requires explicit `-UpdateExisting`. Inspect drafts, selections,
 runtime settings, and permissions before publishing. Do not use these scripts
 to replace unrelated resources or share an unsecured model.
+
+`scripts/update-gold-model.ps1 -OutcomesMetadataOnly` compares a supplied
+TMDL baseline with the current Outcomes definition before applying the
+targeted metadata corrections. It preserves unrelated parts and refuses
+unexpected metadata; review a fresh baseline and refresh and validate after
+the update. It does not configure Prep data for AI or security.
 
 `scripts/foundry_agent.py` creates the Foundry agent and its delegated
 connections or asks the deployed agent a question. It takes resource values

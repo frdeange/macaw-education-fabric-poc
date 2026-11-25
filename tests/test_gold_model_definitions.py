@@ -38,6 +38,30 @@ def test_outcomes_averages_detailed_marks_and_excludes_qualitative_outcomes():
     assert "fromColumn: 'Assessment Results'.'Date Key'" in parts["definition/relationships.tmdl"]
 
 
+def test_outcomes_metadata_marks_unique_dimensions_and_preserves_precision():
+    parts = decode("outcomes")
+    for name in ("Campus", "Class Section", "Department", "Programme Track", "Subject", "Year Level"):
+        table = parts[f"definition/tables/{name}.tmdl"]
+        key = table.split("\tcolumn 'Key'\n", 1)[1].split("\n\n", 1)[0]
+        assert "\t\tisKey" in key
+    campus = parts["definition/tables/Campus.tmdl"]
+    city = campus.split("\tcolumn 'City'\n", 1)[1].split("\n\n", 1)[0]
+    assert "\t\tdataCategory: City" in city
+    date_table = parts["definition/tables/Date.tmdl"]
+    date_column = date_table.split("\tcolumn 'Date'\n", 1)[1].split("\n\n", 1)[0]
+    assert "\tdataCategory: Time" in date_table
+    assert "\t\tisKey" in date_column
+    assert "\t\tformatString: yyyy-MM-dd" in date_column
+    assert date_table.count("\t\tisKey") == 1
+    assert "entityName: dim_learning_outcomes_date" in date_table
+    assert "measure 'Calendar Dates' = COUNTROWS('Date')\n\t\tformatString: #,0" in date_table
+    table = parts["definition/tables/Assessment Results.tmdl"]
+    assert table.count("\t\tformatString: #,0\n") == 2
+    assert "AVERAGE('Assessment Results'[Mark])\n\t\tformatString: 0.00" in table
+    assert "\tcolumn 'Mark'\n" in table and "\t\tisHidden" in table.split("\tcolumn 'Mark'\n", 1)[1]
+    assert "entityName: dim_date" in decode("operations")["definition/tables/Date.tmdl"]
+
+
 def test_class_sections_are_connected_to_detailed_educational_facts():
     for domain, tables in (
         ("operations", ("Enrollment", "Subject Enrollment", "Attendance", "Planned Timetable",

@@ -9,7 +9,8 @@ def quote(name):
     return "'" + name.replace("'", "''") + "'"
 
 
-def column(name, source, kind, description, hidden=False):
+def column(name, source, kind, description, hidden=False, *, is_key=False,
+           data_category=None, format_string=None):
     text = [
         f"\t/// {description}",
         f"\tcolumn {quote(name)}",
@@ -19,6 +20,12 @@ def column(name, source, kind, description, hidden=False):
     ]
     if hidden:
         text.append("\t\tisHidden")
+    if is_key:
+        text.append("\t\tisKey")
+    if data_category:
+        text.append(f"\t\tdataCategory: {data_category}")
+    if format_string:
+        text.append(f"\t\tformatString: {format_string}")
     return "\n".join(text)
 
 
@@ -28,6 +35,14 @@ def measure(name, expression, description, fmt="#,##0"):
         f"\tmeasure {quote(name)} = {expression}",
         f"\t\tformatString: {fmt}",
     ])
+
+
+CALENDAR_DATES_MEASURE = (
+    "Calendar Dates",
+    "COUNTROWS('Date')",
+    "Calendar dates, including days without assessments; future dates are not observations.",
+    "#,0",
+)
 
 
 DIMENSIONS = {
@@ -151,11 +166,11 @@ OUTCOMES = {
          ("Qualitative Outcome", "qualitative_outcome", "string"),
          ("Assessment Period", "assessment_period", "int64")],
         [("Assessment Results", "COUNTROWS('Assessment Results')",
-          "Observed assessment results, not enrolled or distinct assessed students.", "#,##0"),
+          "Observed assessment results, not enrolled or distinct assessed students.", "#,0"),
          ("Secondary Average Mark", "AVERAGE('Assessment Results'[Mark])",
           "Mean numeric secondary mark; qualitative primary outcomes are excluded.", "0.00"),
          ("Qualitative Outcomes", "COUNTA('Assessment Results'[Qualitative Outcome])",
-          "Observed qualitative results, mostly primary, with no numeric mark.", "#,##0")],
+          "Observed qualitative results, mostly primary, with no numeric mark.", "#,0")],
     ),
 }
 
@@ -180,9 +195,24 @@ def build_definition(workspace_id, lakehouse_id, domain):
     relationships = []
     for name in sorted(dimensions):
         entity, key, values = DIMENSIONS[name]
-        fields = [column("Key", key, "int64", "Internal relationship key.", True)]
-        fields += [column(n, s, t, d) for n, s, t, d in values]
-        parts[f"definition/tables/{name}.tmdl"] = table_text(name, entity, fields, f"Dimension for {name.lower()} analysis.")
+        is_outcomes = domain == "outcomes"
+        is_outcomes_date = is_outcomes and name == "Date"
+        fields = [column("Key", key, "int64", "Internal relationship key.", True,
+                         is_key=is_outcomes and name != "Date")]
+        fields += [
+            column(n, s, t, d,
+                   is_key=is_outcomes_date and n == "Date",
+                   data_category="City" if is_outcomes and name == "Campus" and n == "City" else None,
+                   format_string="yyyy-MM-dd" if is_outcomes_date and n == "Date" else None)
+            for n, s, t, d in values
+        ]
+        if is_outcomes_date:
+            entity = "dim_learning_outcomes_date"
+            fields.insert(0, measure(*CALENDAR_DATES_MEASURE))
+        parts[f"definition/tables/{name}.tmdl"] = table_text(
+            name, entity, fields, f"Dimension for {name.lower()} analysis.",
+            data_category="Time" if is_outcomes_date else None,
+        )
     for name, spec in facts.items():
         fields = []
         for measure_name, expression, description, fmt in spec["measures"]:
@@ -218,9 +248,11 @@ def build_definition(workspace_id, lakehouse_id, domain):
             for path, text in parts.items()]
 
 
-def table_text(name, entity, fields, description):
+def table_text(name, entity, fields, description, *, data_category=None):
     return (
-        f"/// {description}\ntable {quote(name)}\n\n"
+        f"/// {description}\ntable {quote(name)}\n"
+        + (f"\tdataCategory: {data_category}\n" if data_category else "")
+        + "\n"
         + "\n\n".join(fields)
         + f"\n\n\tpartition {quote(name)} = entity\n\t\tmode: directLake\n\t\tsource\n"
         + f"\t\t\tentityName: {entity}\n\t\t\tschemaName: dbo\n"

@@ -319,6 +319,33 @@ returned blank for student-day attendance; Dutch enrollment at Amsterdam
 returned 960. The outcomes model matched SQL totals and selected subject
 breakdowns. These are not restricted-user tests.
 
+### Learning Outcomes model corrections
+
+The Gold notebook generates `dim_learning_outcomes_date` from the Silver
+calendar bounds, extending them to full calendar years. It checks that Silver
+dates match the generated calendar and every assessment date has a matching
+key. The deployed snapshot has 730 unique dates from 2026-01-01 through
+2027-12-31; the Operations model still uses the original calendar. Extra
+calendar dates do not create observed assessments.
+
+The Outcomes Date table is marked as Time, with its date column as the key and
+an explicit date format. Six other dimension keys and the City data category
+were checked. Whole-number measures use `#,0`. The hidden `Mark` column is
+required by Secondary Average Mark, which intentionally keeps two decimals
+rather than following the analyzer's whole-number warning. The analyzer has
+not been rerun.
+
+After refresh, administrator queries returned 730 calendar dates, 87,100
+assessment results, 38,400 qualitative outcomes and an average mark of 6.75
+when formatted. The `Calendar Dates` measure counts dates including days
+without assessments. An Outcomes agent test returned the correct 17,420
+results for 2026-09-11 and 730 when explicitly asked to use that measure.
+However, a general distinct-date question still returned 731. A separate DAX
+`VALUES` count includes a blank member, but the agent's generated query was
+not captured and the cause of its answer is unconfirmed. Review the model's
+Prep data for AI configuration and retest; the explicit measure alone is not
+a guarantee of correct natural-language answers.
+
 Both published agents remain unshared. MCP smoke tests returned 960 Dutch
 students at each campus and 38,400 qualitative outcomes. The operations
 agent initially misrepresented overall attendance as Dutch lesson attendance.

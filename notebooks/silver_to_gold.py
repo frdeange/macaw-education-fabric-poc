@@ -13,12 +13,41 @@ gold_lakehouse_name = "__GOLD_LAKEHOUSE_NAME__"
 # %%
 import json
 import re
+from datetime import date, timedelta
 from pyspark.sql import functions as F
 
 
 def require(condition, message):
     if not condition:
         raise ValueError(message)
+
+
+def full_calendar_year_rows(first_date, last_date):
+    require(
+        type(first_date) is date and type(last_date) is date and first_date <= last_date,
+        "The Silver calendar must have valid, ordered date bounds.",
+    )
+    month_names = (
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
+    )
+    weekday_names = (
+        "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+    )
+    start = date(first_date.year, 1, 1)
+    end = date(last_date.year, 12, 31)
+    rows = []
+    for offset in range((end - start).days + 1):
+        day = start + timedelta(days=offset)
+        rows.append((
+            day.year * 10000 + day.month * 100 + day.day,
+            day,
+            day.year,
+            day.month,
+            month_names[day.month - 1],
+            weekday_names[day.weekday()],
+        ))
+    return rows
 
 
 require(re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", silver_lakehouse_name) is not None,
@@ -67,6 +96,30 @@ enrollment = silver_tables["fact_enrollment"]
 subject_enrollment = silver_tables["fact_subject_enrollment"]
 attendance = silver_tables["fact_attendance"]
 assessment_result = silver_tables["fact_assessment_result"]
+
+date_columns = (
+    "date_key", "calendar_date", "calendar_year", "month_number", "month_name", "day_of_week_name",
+)
+silver_dates = silver_tables["dim_date"].select(*date_columns)
+date_bounds = silver_dates.agg(
+    F.min("calendar_date").alias("first_date"),
+    F.max("calendar_date").alias("last_date"),
+).first()
+calendar_rows = full_calendar_year_rows(date_bounds["first_date"], date_bounds["last_date"])
+outcomes_dates = spark.createDataFrame(
+    calendar_rows,
+    "date_key int, calendar_date date, calendar_year int, month_number int, "
+    "month_name string, day_of_week_name string",
+)
+require(
+    silver_dates.exceptAll(outcomes_dates).limit(1).count() == 0,
+    "Silver calendar rows must uniquely match their generated calendar dates.",
+)
+require(
+    assessment_result.select("date_key").distinct()
+    .join(outcomes_dates.select("date_key"), "date_key", "left_anti").limit(1).count() == 0,
+    "Assessment dates must be present in the outcomes calendar.",
+)
 
 gold_enrollment_by_year_level = (
     enrollment.groupBy(
@@ -184,6 +237,7 @@ for name, frame, keys in [
             f"Gold {name} has duplicate business-grain keys.")
 
 gold_outputs = {
+    "dim_learning_outcomes_date": outcomes_dates,
     "gold_enrollment_by_year_level": gold_enrollment_by_year_level,
     "gold_class_section_sizes": gold_class_section_sizes,
     "gold_subject_enrollment": gold_subject_enrollment,
@@ -207,6 +261,7 @@ for table_name, (measure, expected_total) in expected_totals.items():
     )
     actual_totals[table_name] = int(actual_total)
 actual_totals.update(detail_expected_counts)
+actual_totals["dim_learning_outcomes_date"] = len(calendar_rows)
 
 section_size_stats = gold_class_section_sizes.agg(
     F.count("*").alias("SectionCount"),

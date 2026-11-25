@@ -2,6 +2,7 @@ import ast
 import json
 import sys
 import unittest
+from datetime import date, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -24,6 +25,29 @@ def assignment_value(path, assignment_name):
 
 
 class MedallionNotebookTests(unittest.TestCase):
+    def test_outcomes_calendar_covers_full_years_and_leap_day(self):
+        source = ROOT / "notebooks" / "silver_to_gold.py"
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        functions = [
+            node for node in tree.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name in {"require", "full_calendar_year_rows"}
+        ]
+        namespace = {"date": date, "timedelta": timedelta}
+        exec(compile(ast.Module(body=functions, type_ignores=[]), str(source), "exec"), namespace)
+        make_calendar = namespace["full_calendar_year_rows"]
+
+        rows = make_calendar(date(2024, 8, 17), date(2025, 7, 23))
+        self.assertEqual(len(rows), 731)
+        self.assertEqual(rows[0], (20240101, date(2024, 1, 1), 2024, 1, "January", "Monday"))
+        self.assertEqual(rows[-1], (20251231, date(2025, 12, 31), 2025, 12, "December", "Wednesday"))
+        self.assertIn((20240229, date(2024, 2, 29), 2024, 2, "February", "Thursday"), rows)
+        self.assertTrue(all(b[1] - a[1] == timedelta(days=1) for a, b in zip(rows, rows[1:])))
+        self.assertEqual(len({row[0] for row in rows}), len(rows))
+        for first, last in ((None, date(2025, 1, 1)), (date(2025, 2, 1), date(2025, 1, 1))):
+            with self.subTest(first=first, last=last), self.assertRaises(ValueError):
+                make_calendar(first, last)
+
     def test_source_key_and_count_contracts_match_reviewed_baselines(self):
         source_keys = assignment_value(ROOT / "notebooks" / "bronze_to_silver.py", "SOURCE_KEYS")
         expected_counts = assignment_value(

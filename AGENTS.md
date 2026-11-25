@@ -208,6 +208,25 @@ sensitive characteristics from names or create real contact details.
   student-days, 2,485 weekly assignments, 20 incidents, 17 planned overlaps
   and 87,100 assessment results. Department selection and the absence of
   subject-level attendance were also checked in DAX.
+- The Outcomes model now uses a separate Gold calendar covering full calendar
+  years: 730 unique dates from 2026-01-01 through 2027-12-31. The Gold
+  notebook validates the Silver dates and assessment-date keys against it; the
+  Operations calendar remains unchanged. The Outcomes date table is marked as
+  Time with its date column as key and an explicit date format. Six other
+  dimension keys and the City data category were verified. The new
+  `Calendar Dates` measure counts calendar days, including days without
+  assessments; future dates are not observations. Assessment Results and
+  Qualitative Outcomes retain whole-number formats. The hidden `Mark` column
+  and the two-decimal Secondary Average Mark are necessary and were retained
+  despite the analyzer warnings. The analyzer itself has not been rerun.
+- An administrator MCP test of the Outcomes agent returned the correct
+  17,420 results for 2026-09-11. It returned 730 when asked to use the
+  `Calendar Dates` measure, but still answered 731 to a general distinct-date
+  question after that measure became available to the published agent. A DAX
+  `VALUES` count also includes one blank member, while the actual calendar
+  count is 730; the agent's generated query was not captured, so the cause
+  remains unconfirmed. Review Prep data for AI and retest before relying on
+  conversational calendar counts.
 - Their published, unshared Data Agents returned correct Dutch enrollment and
   qualitative-outcome results in administrator MCP smoke tests. Operations
   initially misrepresented overall attendance as Dutch lesson attendance;
@@ -590,6 +609,10 @@ already applied or security controls:
 - Explain the snapshot date, attendance numerator and denominator, qualitative
   primary outcomes, overlapping subject and department membership, supported
   individual-subject enrollment, and unsupported individual-subject attendance.
+- For distinct calendar-day counts in Outcomes, recommend the `Calendar Dates`
+  measure and explain that days without assessments are included; future
+  calendar dates are not observations. Retest the agent because instructions
+  do not guarantee its choice of measure.
 - Include only business-relevant AI-visible fields and their measure
   dependencies; do not expose technical security tables merely to improve
   natural-language answers.
